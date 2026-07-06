@@ -1,0 +1,13 @@
+{
+  "expectedEpcs": [
+    "3034257BF7194E4000000001",
+    "3034257BF7194E4000000002"
+  ],
+  "thresholds": {
+    "minReadRate": 0.99,
+    "maxUnexpected": 0,
+    "maxInvalid": 0,
+    "maxDuplicateEventIds": 0,
+    "minReadsPerTag": 2
+  }
+}

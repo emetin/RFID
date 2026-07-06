@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Globaltex RFID Operations</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --ink: #17211d;
+      --muted: #66746d;
+      --line: #e3e9e5;
+      --surface: #ffffff;
+      --canvas: #f3f6f4;
+      --green-950: #0d3026;
+      --green-800: #174c3a;
+      --green-600: #23805e;
+      --green-100: #dff3e9;
+      --amber: #c57918;
+      --red: #b63d3d;
+      --blue: #326ca8;
+      background: var(--canvas);
+      color: var(--ink);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; min-height: 100vh; background: var(--canvas); }
+    button, select { font: inherit; }
+    .shell { min-height: 100vh; }
+    .page[hidden] { display: none !important; }
+    .page { animation: page-in .16s ease-out; }
+    @keyframes page-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+    .sidebar {
+      position: fixed;
+      inset: 0 auto 0 0;
+      width: 218px;
+      padding: 20px 14px;
+      color: #fff;
+      background:
+        radial-gradient(circle at 20% 10%, rgb(68 154 117 / 34%), transparent 32%),
+        linear-gradient(180deg, #10382b, #0b2a22);
+      display: flex;
+      flex-direction: column;
+      z-index: 10;
+    }
+    .brand { display: flex; gap: 10px; align-items: center; padding: 0 7px 22px; }
+    .brand-mark {
+      width: 34px; height: 34px; border-radius: 10px;
+      display: grid; place-items: center;
+      background: linear-gradient(145deg, #62d2a4, #2c8b67);
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 35%), 0 12px 30px rgb(0 0 0 / 22%);
+      font-weight: 800;
+    }
+    .brand strong { display: block; font-size: 11px; letter-spacing: .12em; }
+    .brand span { display: block; margin-top: 2px; color: #a9c7bb; font-size: 9px; }
+    nav { display: grid; gap: 5px; }
+    nav a {
+      color: #bad0c7; text-decoration: none; padding: 9px 10px;
+      border-radius: 8px; font-size: 11px; font-weight: 600; transition: .16s ease;
+    }
+    nav a:hover, nav a.active { color: #fff; background: rgb(255 255 255 / 9%); }
+    .sidebar-foot {
+      margin-top: auto; padding: 16px 12px 4px; color: #91aea2;
+      border-top: 1px solid rgb(255 255 255 / 10%); font-size: 9px; line-height: 1.6;
+    }
+    .workspace { margin-left: 218px; min-width: 0; }
+    .topbar {
+      min-height: 58px; padding: 9px clamp(18px, 3vw, 34px);
+      display: flex; align-items: center; justify-content: space-between; gap: 20px;
+      background: rgb(255 255 255 / 88%); border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(16px); position: sticky; top: 0; z-index: 8;
+    }
+    .context { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .context-dot { width: 9px; height: 9px; border-radius: 50%; background: #2eb67d; box-shadow: 0 0 0 5px #dff5ea; }
+    .context strong { display: block; font-size: 11px; }
+    .context small { display: block; color: var(--muted); margin-top: 1px; font-size: 9px; }
+    .toolbar { display: flex; align-items: center; gap: 10px; }
+    select, .button {
+      min-height: 32px; border: 1px solid #d7e0db; border-radius: 8px;
+      background: #fff; color: var(--ink); padding: 0 9px; font-size: 10px;
+    }
+    select { max-width: 210px; }
+    .button { cursor: pointer; font-weight: 650; }
+    .button:hover { border-color: #91b8a7; background: #f7faf8; }
+    .button.danger { color: #a22e2e; }
+    main { padding: 22px clamp(18px, 3vw, 34px) 44px; }
+    .hero {
+      display: flex; justify-content: space-between; align-items: flex-end; gap: 24px;
+      margin-bottom: 18px;
+    }
+    .eyebrow { color: var(--green-600); font-size: 9px; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
+    h1 { margin: 5px 0; font-size: clamp(22px, 3vw, 30px); line-height: 1.1; letter-spacing: -.03em; }
+    .hero p { margin: 0; color: var(--muted); max-width: 690px; line-height: 1.5; font-size: 11px; }
+    .role-chip {
+      display: inline-flex; align-items: center; gap: 7px; padding: 8px 11px;
+      border-radius: 999px; background: var(--green-100); color: var(--green-800);
+      font-size: 9px; font-weight: 800; white-space: nowrap;
+    }
+    .kpis { display: grid; grid-template-columns: repeat(6, minmax(112px, 1fr)); gap: 10px; margin-bottom: 14px; }
+    .kpi, .panel {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+      box-shadow: 0 10px 32px rgb(29 57 45 / 5%);
+    }
+    .kpi { padding: 13px; position: relative; overflow: hidden; }
+    .kpi::after {
+      content: ""; position: absolute; width: 72px; height: 72px; border-radius: 50%;
+      right: -34px; top: -34px; background: var(--tint, #e7f2ed);
+    }
+    .kpi-label { color: var(--muted); font-size: 8px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+    .kpi-value { margin-top: 8px; font-size: 23px; font-weight: 780; letter-spacing: -.04em; }
+    .kpi-note { margin-top: 3px; min-height: 12px; color: #819089; font-size: 8px; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(280px, .85fr); gap: 14px; margin-bottom: 14px; }
+    .panel { overflow: hidden; min-width: 0; }
+    .panel-head {
+      padding: 13px 15px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .panel-head h2 { margin: 0; font-size: 12px; letter-spacing: -.01em; }
+    .panel-head span { color: var(--muted); font-size: 9px; }
+    .status-list { padding: 5px 15px 13px; }
+    .status-row { display: grid; grid-template-columns: 90px 1fr 36px; gap: 9px; align-items: center; padding-top: 10px; }
+    .status-row span { color: var(--muted); font-size: 9px; text-transform: capitalize; }
+    .track { height: 8px; background: #edf1ee; border-radius: 999px; overflow: hidden; }
+    .bar { height: 100%; min-width: 0; border-radius: inherit; background: var(--green-600); }
+    .status-row strong { text-align: right; font-size: 12px; }
+    .chain-card {
+      margin: 16px 20px 20px; padding: 18px; border-radius: 14px;
+      color: #fff; background: linear-gradient(135deg, #154b39, #237858);
+    }
+    .chain-card small { color: #c9e4d8; }
+    .chain-card strong { display: block; margin-top: 7px; font-size: 27px; }
+    .chain-card p { margin: 6px 0 0; color: #d8ebe3; font-size: 12px; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 15px; text-align: left; border-bottom: 1px solid #edf1ee; white-space: nowrap; font-size: 10px; }
+    th { color: #718079; background: #fafcfb; font-size: 8px; text-transform: uppercase; letter-spacing: .07em; }
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:hover td { background: #fbfdfc; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+    .badge {
+      display: inline-flex; align-items: center; padding: 5px 8px; border-radius: 999px;
+      background: #eef2f0; color: #53615b; font-size: 10px; font-weight: 800; text-transform: uppercase;
+    }
+    .badge.online, .badge.active, .badge.info { background: #e0f4ea; color: #18704e; }
+    .badge.warning, .badge.degraded, .badge.quarantined { background: #fff0d8; color: #98600f; }
+    .badge.critical, .badge.offline, .badge.damaged, .badge.dead_letter { background: #fde5e5; color: #a22e2e; }
+    .badge.lost { background: #e7eef8; color: #345f93; }
+    .empty, .error { padding: 22px 15px; color: var(--muted); font-size: 10px; line-height: 1.6; }
+    .error { color: #a22e2e; background: #fff8f8; }
+    .stack { display: grid; gap: 20px; }
+    .footer-note { margin-top: 24px; color: #839088; font-size: 11px; text-align: right; }
+    .user-form { padding: 14px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; border-bottom: 1px solid var(--line); background: #fbfcfb; }
+    .user-form label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+    .user-form input, .user-form select { width: 100%; height: 34px; border: 1px solid #d7e0db; border-radius: 8px; padding: 0 9px; background: #fff; font-size: 10px; }
+    .user-form .wide { grid-column: span 2; }
+    .tenant-choices { display: flex; flex-wrap: wrap; gap: 7px; padding-top: 2px; }
+    .tenant-choice { display: inline-flex !important; align-items: center; gap: 6px; margin: 0 !important; padding: 8px 10px; border: 1px solid #dce5e0; border-radius: 9px; background: #fff; text-transform: none !important; letter-spacing: 0 !important; font-size: 11px !important; }
+    .tenant-choice input { width: auto; height: auto; margin: 0; }
+    .form-actions { display: flex; gap: 8px; align-items: end; }
+    .mini-button { border: 1px solid #d7e0db; border-radius: 8px; background: #fff; padding: 7px 9px; cursor: pointer; font-size: 11px; font-weight: 700; }
+    .mini-button:hover { background: #f2f7f4; }
+    .form-message { grid-column: 1 / -1; min-height: 16px; color: var(--red); font-size: 11px; }
+    @media (max-width: 1240px) { .kpis { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 920px) {
+      .sidebar { position: static; width: auto; min-height: auto; padding: 18px 20px; }
+      .brand { padding: 0; }
+      nav { display: flex; gap: 4px; margin-top: 14px; overflow-x: auto; }
+      nav a { flex: 0 0 auto; }
+      .sidebar-foot { display: none; }
+      .workspace { margin-left: 0; }
+      .topbar { position: static; }
+      .layout { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 640px) {
+      .topbar, .hero { align-items: stretch; flex-direction: column; }
+      .toolbar { width: 100%; }
+      select { flex: 1; max-width: none; }
+      .kpis { grid-template-columns: repeat(2, 1fr); }
+      .user-form { grid-template-columns: 1fr; }
+      .user-form .wide { grid-column: span 1; }
+      .hero { margin-bottom: 22px; }
+      main { padding-top: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">G</div>
+        <div><strong>GLOBALTEX</strong><span>RFID Control Center</span></div>
+      </div>
+      <nav aria-label="Dashboard sections">
+        <a data-route="overview" href="/dashboard">Overview</a>
+        <a data-route="inventory" href="/dashboard/inventory">Inventory</a>
+        <a data-route="exceptions" href="/dashboard/exceptions">Exceptions</a>
+        <a data-route="devices" href="/dashboard/devices">Reader health</a>
+        <a data-route="movements" href="/dashboard/movements">Movements</a>
+        <a data-route="activity" href="/dashboard/activity">Activity</a>
+        <a data-route="users" id="users-nav" href="/dashboard/users" hidden>Users & access</a>
+      </nav>
+      <div class="sidebar-foot">
+        Item-level textile visibility<br>
+        PostgreSQL + Edge Gateway
+      </div>
+    </aside>
+
+    <div class="workspace">
+      <header class="topbar">
+        <div class="context">
+          <span class="context-dot"></span>
+          <div><strong id="tenant-name">Loading hotel...</strong><small id="sync-state">Connecting to operations API</small></div>
+        </div>
+        <div class="toolbar">
+          <select id="tenant-select" aria-label="Select hotel" hidden></select>
+          <button class="button" id="refresh" type="button">Refresh</button>
+          <button class="button danger" id="logout" type="button">Sign out</button>
+        </div>
+      </header>
+
+      <main>
+        <div class="page" data-page="overview">
+          <section class="hero">
+            <div><div class="eyebrow">RFID OPERATIONS</div><h1>Hotel textile control</h1><p>Live item visibility and operational health for the selected hotel.</p></div>
+            <div class="role-chip"><span>&bull;</span><span id="identity">Authenticated session</span></div>
+          </section>
+          <section class="kpis" aria-label="Key metrics">
+            <article class="kpi"><div class="kpi-label">Physical units</div><div class="kpi-value" id="units">&mdash;</div><div class="kpi-note">All observed EPCs</div></article>
+            <article class="kpi" style="--tint:#dff3e9"><div class="kpi-label">Available</div><div class="kpi-value" id="available">&mdash;</div><div class="kpi-note">Active stock</div></article>
+            <article class="kpi" style="--tint:#fff0d8"><div class="kpi-label">Open exceptions</div><div class="kpi-value" id="exceptions-count">&mdash;</div><div class="kpi-note">Needs review</div></article>
+            <article class="kpi"><div class="kpi-label">Pending moves</div><div class="kpi-value" id="pending">&mdash;</div><div class="kpi-note">Awaiting evidence</div></article>
+            <article class="kpi" style="--tint:#fde5e5"><div class="kpi-label">Reader issues</div><div class="kpi-value" id="reader-issues">&mdash;</div><div class="kpi-note">Offline or degraded</div></article>
+            <article class="kpi"><div class="kpi-label">Active alerts</div><div class="kpi-value" id="active-alerts">&mdash;</div><div class="kpi-note">Operational attention</div></article>
+          </section>
+          <section class="layout">
+            <article class="panel"><div class="panel-head"><h2>Asset status</h2><span>Physical vs available</span></div><div class="status-list" id="status-content"><div class="empty">Loading status distribution...</div></div></article>
+            <article class="panel" id="chain-panel" hidden><div class="panel-head"><h2>Chain overview</h2><span>Allowed hotels</span></div><div class="chain-card"><small>Chain-wide physical units</small><strong id="chain-units">&mdash;</strong><p id="chain-detail">Loading chain totals...</p></div></article>
+          </section>
+        </div>
+
+        <div class="page" data-page="inventory" hidden>
+          <section class="hero"><div><div class="eyebrow">INVENTORY</div><h1>Product inventory</h1><p>SKU, unit and packaging equivalents for the selected hotel.</p></div></section>
+          <section class="panel"><div class="panel-head"><h2>Inventory by product</h2><span id="inventory-caption">Current hotel</span></div><div id="inventory-content"><div class="empty">Loading inventory...</div></div></section>
+        </div>
+
+        <div class="page" data-page="exceptions" hidden>
+          <section class="hero"><div><div class="eyebrow">EXCEPTIONS</div><h1>Attention queue</h1><p>Unknown, missing and unexpected EPC cases with operational alerts.</p></div></section>
+          <section class="layout"><article class="panel"><div class="panel-head"><h2>Open exceptions</h2><span>RFID cases</span></div><div id="exception-content"><div class="empty">Loading exceptions...</div></div></article><article class="panel"><div class="panel-head"><h2>Operational alerts</h2><span>Current attention</span></div><div id="alert-content"><div class="empty">Loading alerts...</div></div></article></section>
+        </div>
+
+        <div class="page" data-page="devices" hidden>
+          <section class="hero"><div><div class="eyebrow">DEVICES</div><h1>Reader health</h1><p>Gateway connectivity, reader state and offline queue depth.</p></div></section>
+          <section class="panel"><div class="panel-head"><h2>Gateway and reader health</h2><span>Live telemetry</span></div><div id="health-content"><div class="empty">Loading device health...</div></div></section>
+        </div>
+
+        <div class="page" data-page="movements" hidden>
+          <section class="hero"><div><div class="eyebrow">MOVEMENTS</div><h1>Movement review</h1><p>Confidence-gated location changes awaiting evidence.</p></div></section>
+          <section class="panel"><div class="panel-head"><h2>Movement review queue</h2><span>Candidate changes</span></div><div id="movement-content"><div class="empty">Loading movement evidence...</div></div></section>
+        </div>
+
+        <div class="page" data-page="activity" hidden>
+          <section class="hero"><div><div class="eyebrow">ACTIVITY</div><h1>Audit and integrations</h1><p>Administrative changes and failed external deliveries.</p></div></section>
+          <section class="layout"><article class="panel"><div class="panel-head"><h2>Recent audit activity</h2><span>Authenticated mutations</span></div><div id="audit-content"><div class="empty">Loading audit events...</div></div></article><article class="panel"><div class="panel-head"><h2>Integration failures</h2><span>Dead-letter queue</span></div><div id="integration-content"><div class="empty">Loading integration events...</div></div></article></section>
+        </div>
+
+        <div class="page" data-page="users" hidden>
+          <section class="hero"><div><div class="eyebrow">ACCESS</div><h1>Users and hotels</h1><p>Create accounts, assign roles and control hotel access.</p></div></section>
+          <section class="panel" id="users-panel" hidden>
+            <div class="panel-head"><h2>User and hotel access</h2><span>Persistent role assignments</span></div>
+            <form class="user-form" id="user-form">
+              <div><label for="user-name">Username</label><input id="user-name" required placeholder="manager@example.com"></div>
+              <div><label for="user-display">Display name</label><input id="user-display" required placeholder="Hotel Manager"></div>
+              <div><label for="user-password">Password</label><input id="user-password" type="password" minlength="12" placeholder="Minimum 12 characters"></div>
+              <div><label for="user-role">Role</label><select id="user-role"><option value="viewer">Viewer</option><option value="operator">Operator</option><option value="hotel_admin">Hotel admin</option><option value="chain_admin">Chain admin</option></select></div>
+              <div class="wide"><label>Assigned hotels</label><div class="tenant-choices" id="user-tenants"></div></div>
+              <div><label for="user-default">Default hotel</label><select id="user-default"></select></div>
+              <div class="form-actions"><button class="button" id="save-user" type="submit">Create user</button><button class="button" id="cancel-user" type="button" hidden>Cancel</button></div>
+              <div class="form-message" id="user-message"></div>
+            </form>
+            <div id="users-content"><div class="empty">Loading assigned users...</div></div>
+          </section>
+        </div>
+        <div class="footer-note" id="updated-at">Not refreshed yet</div>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    const number = new Intl.NumberFormat("en-US");
+    const date = new Intl.DateTimeFormat("en-GB", {
+      day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"
+    });
+    const ids = [
+      "inventory-content", "status-content", "exception-content", "alert-content",
+      "health-content", "movement-content", "audit-content", "integration-content"
+    ];
+    const routes = new Set(["overview", "inventory", "exceptions", "devices", "movements", "activity", "users"]);
+
+    function routeFromPath() {
+      const segment = location.pathname.replace(/^\/dashboard\/?/, "").split("/")[0];
+      return routes.has(segment) ? segment : "overview";
+    }
+    function showRoute(route, { push = false } = {}) {
+      let resolved = routes.has(route) ? route : "overview";
+      if (resolved === "users" && currentIdentity &&
+          !["hotel_admin", "chain_admin"].includes(currentIdentity.role)) {
+        resolved = "overview";
+      }
+      document.querySelectorAll("[data-page]").forEach(page => {
+        page.hidden = page.dataset.page !== resolved;
+      });
+      document.querySelectorAll("[data-route]").forEach(link => {
+        link.classList.toggle("active", link.dataset.route === resolved);
+      });
+      if (push) {
+        const path = resolved === "overview" ? "/dashboard" : `/dashboard/${resolved}`;
+        history.pushState({ route: resolved }, "", `${path}${location.search}`);
+      }
+      document.title = `${resolved[0].toUpperCase()}${resolved.slice(1)} · Globaltex RFID`;
+      scrollTo({ top: 0, behavior: "auto" });
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, character => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
+      })[character]);
+    }
+    function formatDate(value) {
+      if (!value) return "—";
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? escapeHtml(value) : date.format(parsed);
+    }
+    function badge(value) {
+      const safe = escapeHtml(value || "unknown");
+      const className = String(value || "").toLowerCase().replace(/[^a-z_]/g, "");
+      return `<span class="badge ${className}">${safe}</span>`;
+    }
+    function table(headers, rows) {
+      return `<div class="table-wrap"><table><thead><tr>${headers.map(item => `<th>${escapeHtml(item)}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
+    }
+    function tenantOptions(tenantId) {
+      return { headers: { "x-tenant-id": tenantId } };
+    }
+    async function request(path, options) {
+      const response = await fetch(path, options);
+      if (response.status === 401) {
+        location.replace("/login");
+        throw new Error("Authentication required");
+      }
+      if (!response.ok) {
+        const problem = await response.json().catch(() => ({}));
+        throw new Error(problem.message || `${path} returned ${response.status}`);
+      }
+      return response.json();
+    }
+    function setTenant(identity) {
+      document.querySelector("#tenant-name").textContent = identity.tenantId;
+      document.querySelector("#identity").textContent =
+        `${identity.actorId} · ${identity.role.replaceAll("_", " ")}`;
+      const select = document.querySelector("#tenant-select");
+      if (identity.tenantIds.length > 1) {
+        select.hidden = false;
+        select.innerHTML = identity.tenantIds.map(tenant =>
+          `<option value="${escapeHtml(tenant)}"${tenant === identity.tenantId ? " selected" : ""}>${escapeHtml(tenant)}</option>`
+        ).join("");
+        select.onchange = () => {
+          const query = new URLSearchParams(location.search);
+          query.set("tenantId", select.value);
+          location.search = query.toString();
+        };
+      } else {
+        select.hidden = true;
+      }
+    }
+    function renderStatus(data) {
+      const entries = Object.entries(data.statusCounts || {});
+      const max = Math.max(data.uniqueUnits || 0, 1);
+      document.querySelector("#status-content").innerHTML = entries.map(([status, count]) => `
+        <div class="status-row">
+          <span>${escapeHtml(status)}</span>
+          <div class="track"><div class="bar" style="width:${Math.max(0, Math.min(100, count / max * 100))}%"></div></div>
+          <strong>${number.format(count)}</strong>
+        </div>`).join("") || '<div class="empty">No asset status data yet.</div>';
+    }
+    function renderInventory(data) {
+      if (!data.lines.length) {
+        document.querySelector("#inventory-content").innerHTML =
+          '<div class="empty">No registered RFID inventory has been scanned yet.</div>';
+        return;
+      }
+      const rows = data.lines.map(line => `<tr>
+        <td class="mono">${escapeHtml(line.sku)}</td><td>${escapeHtml(line.name)}</td>
+        <td><strong>${number.format(line.units)}</strong></td><td>${number.format(line.fullPallets)}</td>
+        <td>${number.format(line.fullBoxes)}</td><td>${number.format(line.looseUnits)}</td>
+      </tr>`);
+      document.querySelector("#inventory-content").innerHTML =
+        table(["SKU", "Product", "Units", "Pallets", "Boxes", "Loose"], rows);
+    }
+    function renderExceptions(items) {
+      if (!items.length) {
+        document.querySelector("#exception-content").innerHTML =
+          '<div class="empty">No open RFID exceptions. Receiving and inventory are clear.</div>';
+        return;
+      }
+      const rows = items.map(item => `<tr>
+        <td>${badge(item.severity)}</td><td>${escapeHtml(item.exceptionType.replaceAll("_", " "))}</td>
+        <td class="mono">${escapeHtml(item.epc || "—")}</td><td>${escapeHtml(item.shipmentId || "—")}</td>
+        <td>${formatDate(item.lastSeenAt)}</td>
+      </tr>`);
+      document.querySelector("#exception-content").innerHTML =
+        table(["Level", "Type", "EPC", "Shipment", "Last seen"], rows);
+    }
+    function renderAlerts(items) {
+      if (!items.length) {
+        document.querySelector("#alert-content").innerHTML =
+          '<div class="empty">No active operational alerts.</div>';
+        return;
+      }
+      const rows = items.map(item => `<tr>
+        <td>${badge(item.severity)}</td><td>${escapeHtml(item.title)}</td>
+        <td>${escapeHtml(item.entityId || "—")}</td><td>${formatDate(item.lastSeenAt)}</td>
+      </tr>`);
+      document.querySelector("#alert-content").innerHTML =
+        table(["Level", "Alert", "Entity", "Last seen"], rows);
+    }
+    function renderHealth(items) {
+      if (!items.length) {
+        document.querySelector("#health-content").innerHTML =
+          '<div class="empty">No Gateway heartbeat has been received yet.</div>';
+        return;
+      }
+      const rows = items.map(item => `<tr>
+        <td><strong>${escapeHtml(item.readerId)}</strong></td><td>${badge(item.status)}</td>
+        <td>${escapeHtml(item.adapter)}</td><td>${item.readerConnected ? "Connected" : "Disconnected"}</td>
+        <td>${number.format(item.queueDepth)}</td><td>${formatDate(item.lastReadAt)}</td>
+        <td>${formatDate(item.receivedAt)}</td><td>${escapeHtml(item.lastError || "—")}</td>
+      </tr>`);
+      document.querySelector("#health-content").innerHTML =
+        table(["Reader", "Status", "Adapter", "Link", "Queue", "Last read", "Heartbeat", "Error"], rows);
+    }
+    function renderMovements(items) {
+      if (!items.length) {
+        document.querySelector("#movement-content").innerHTML =
+          '<div class="empty">No movements are waiting for additional reader evidence.</div>';
+        return;
+      }
+      const rows = items.map(item => `<tr>
+        <td class="mono">${escapeHtml(item.epc)}</td>
+        <td>${escapeHtml(item.fromFacilityId)} / ${escapeHtml(item.fromZoneId)}</td>
+        <td>${escapeHtml(item.toFacilityId)} / ${escapeHtml(item.toZoneId)}</td>
+        <td>${number.format(item.observations)}</td><td>${escapeHtml(item.reason)}</td>
+        <td>${formatDate(item.lastObservedAt)}</td>
+      </tr>`);
+      document.querySelector("#movement-content").innerHTML =
+        table(["EPC", "Current", "Candidate", "Reads", "Reason", "Observed"], rows);
+    }
+    function renderAudit(items) {
+      if (!items.length) {
+        document.querySelector("#audit-content").innerHTML =
+          '<div class="empty">No administrative changes have been recorded yet.</div>';
+        return;
+      }
+      const rows = items.map(item => `<tr>
+        <td>${formatDate(item.createdAt)}</td><td>${escapeHtml(item.actorId)}</td>
+        <td>${badge(item.actorRole)}</td><td>${escapeHtml(item.action)}</td>
+      </tr>`);
+      document.querySelector("#audit-content").innerHTML =
+        table(["Time", "Actor", "Role", "Action"], rows);
+    }
+    function renderIntegrations(items) {
+      if (!items.length) {
+        document.querySelector("#integration-content").innerHTML =
+          '<div class="empty">No integration events require manual retry.</div>';
+        return;
+      }
+      const rows = items.map(item => `<tr>
+        <td>${formatDate(item.createdAt)}</td><td>${escapeHtml(item.eventType)}</td>
+        <td>${number.format(item.attempts)}</td><td>${escapeHtml(item.lastError || "—")}</td>
+      </tr>`);
+      document.querySelector("#integration-content").innerHTML =
+        table(["Created", "Event", "Attempts", "Error"], rows);
+    }
+
+    let currentIdentity = null;
+    let managedUsers = [];
+    let editingUserId = null;
+
+    function selectedUserTenants() {
+      return [...document.querySelectorAll("#user-tenants input:checked")].map(input => input.value);
+    }
+    function refreshDefaultHotels(preferred) {
+      const assigned = selectedUserTenants();
+      const select = document.querySelector("#user-default");
+      select.innerHTML = assigned.map(tenant =>
+        `<option value="${escapeHtml(tenant)}"${tenant === preferred ? " selected" : ""}>${escapeHtml(tenant)}</option>`
+      ).join("");
+    }
+    function resetUserForm() {
+      editingUserId = null;
+      const form = document.querySelector("#user-form");
+      form.reset();
+      document.querySelector("#user-name").disabled = false;
+      document.querySelector("#user-password").required = true;
+      document.querySelector("#save-user").textContent = "Create user";
+      document.querySelector("#cancel-user").hidden = true;
+      document.querySelector("#user-message").textContent = "";
+      document.querySelectorAll("#user-tenants input").forEach((input, index) => {
+        input.checked = index === 0;
+      });
+      refreshDefaultHotels();
+    }
+    function editUser(userId) {
+      const user = managedUsers.find(item => item.userId === userId);
+      if (!user) return;
+      editingUserId = userId;
+      document.querySelector("#user-name").value = user.username;
+      document.querySelector("#user-name").disabled = true;
+      document.querySelector("#user-display").value = user.displayName;
+      document.querySelector("#user-password").value = "";
+      document.querySelector("#user-password").required = false;
+      document.querySelector("#user-role").value = user.role;
+      document.querySelectorAll("#user-tenants input").forEach(input => {
+        input.checked = user.tenantIds.includes(input.value);
+      });
+      refreshDefaultHotels(user.defaultTenantId);
+      document.querySelector("#save-user").textContent = "Save changes";
+      document.querySelector("#cancel-user").hidden = false;
+    }
+    async function toggleUser(userId) {
+      const user = managedUsers.find(item => item.userId === userId);
+      if (!user) return;
+      try {
+        await request(`/v1/admin/users/${encodeURIComponent(userId)}`, {
+          method: "PUT",
+          headers: { "content-type": "application/json", "x-tenant-id": currentIdentity.tenantId },
+          body: JSON.stringify({ active: !user.active })
+        });
+        await loadUsers();
+      } catch (error) {
+        document.querySelector("#user-message").textContent = error.message;
+      }
+    }
+    function renderUsers(users) {
+      managedUsers = users;
+      if (!users.length) {
+        document.querySelector("#users-content").innerHTML =
+          '<div class="empty">No persistent users yet. Create the first assigned hotel user above.</div>';
+        return;
+      }
+      const rows = users.map(user => `<tr>
+        <td><strong>${escapeHtml(user.displayName)}</strong><br><span class="mono">${escapeHtml(user.username)}</span></td>
+        <td>${badge(user.role)}</td><td>${escapeHtml(user.tenantIds.join(", "))}</td>
+        <td>${escapeHtml(user.defaultTenantId)}</td><td>${badge(user.active ? "active" : "disabled")}</td>
+        <td><button class="mini-button" data-edit-user="${escapeHtml(user.userId)}">Edit</button>
+        <button class="mini-button" data-toggle-user="${escapeHtml(user.userId)}">${user.active ? "Disable" : "Enable"}</button></td>
+      </tr>`);
+      document.querySelector("#users-content").innerHTML =
+        table(["User", "Role", "Hotels", "Default", "Status", "Actions"], rows);
+      document.querySelectorAll("[data-edit-user]").forEach(button => {
+        button.onclick = () => editUser(button.dataset.editUser);
+      });
+      document.querySelectorAll("[data-toggle-user]").forEach(button => {
+        button.onclick = () => toggleUser(button.dataset.toggleUser);
+      });
+    }
+    async function loadUsers() {
+      const data = await request("/v1/admin/users", tenantOptions(currentIdentity.tenantId));
+      renderUsers(data.users);
+    }
+    function configureUserManagement(identity) {
+      if (!["hotel_admin", "chain_admin"].includes(identity.role)) return;
+      document.querySelector("#users-panel").hidden = false;
+      document.querySelector("#users-nav").hidden = false;
+      const roleSelect = document.querySelector("#user-role");
+      roleSelect.querySelector('option[value="chain_admin"]').disabled = identity.role !== "chain_admin";
+      document.querySelector("#user-tenants").innerHTML = identity.tenantIds.map((tenant, index) => `
+        <label class="tenant-choice"><input type="checkbox" value="${escapeHtml(tenant)}"${index === 0 ? " checked" : ""}>${escapeHtml(tenant)}</label>
+      `).join("");
+      document.querySelectorAll("#user-tenants input").forEach(input => {
+        input.onchange = () => refreshDefaultHotels();
+      });
+      refreshDefaultHotels();
+    }
+
+    async function load() {
+      document.querySelector("#sync-state").textContent = "Refreshing operational data";
+      const queryTenant = new URLSearchParams(location.search).get("tenantId");
+      const initialOptions = queryTenant ? tenantOptions(queryTenant) : {};
+      const identity = await request("/v1/admin/me", initialOptions);
+      currentIdentity = identity;
+      setTenant(identity);
+      configureUserManagement(identity);
+      showRoute(routeFromPath());
+      const options = tenantOptions(identity.tenantId);
+      const requests = [
+        request("/v1/admin/summary", options),
+        request("/v1/admin/pending-movements", options),
+        request("/v1/admin/readers/health", options),
+        request("/v1/admin/audit?limit=12", options),
+        request("/v1/admin/integrations/outbox?status=dead_letter&limit=12", options),
+        request("/v1/admin/alerts?limit=30", options),
+        request("/v1/admin/exceptions?status=open&limit=30", options)
+      ];
+      if (identity.role === "chain_admin") {
+        requests.push(request("/v1/admin/chain/summary", options));
+      }
+      const [summary, movements, health, audit, integrations, alerts, exceptions, chain] =
+        await Promise.all(requests);
+      const activeAlerts = alerts.alerts.filter(item => item.status !== "resolved");
+      document.querySelector("#units").textContent = number.format(summary.uniqueUnits);
+      document.querySelector("#available").textContent = number.format(summary.availableUnits);
+      document.querySelector("#exceptions-count").textContent = number.format(exceptions.exceptions.length);
+      document.querySelector("#pending").textContent = number.format(movements.pendingMovements.length);
+      document.querySelector("#reader-issues").textContent =
+        number.format(health.readers.filter(item => item.status !== "online").length);
+      document.querySelector("#active-alerts").textContent = number.format(activeAlerts.length);
+      document.querySelector("#inventory-caption").textContent =
+        `${identity.tenantId} · ${number.format(summary.registeredUnits)} registered`;
+      renderInventory(summary);
+      renderStatus(summary);
+      renderExceptions(exceptions.exceptions);
+      renderAlerts(activeAlerts);
+      renderHealth(health.readers);
+      renderMovements(movements.pendingMovements);
+      renderAudit(audit.events);
+      renderIntegrations(integrations.events);
+      if (chain) {
+        document.querySelector("#chain-panel").hidden = false;
+        document.querySelector("#chain-units").textContent = number.format(chain.totals.uniqueUnits);
+        document.querySelector("#chain-detail").textContent =
+          `${chain.tenantCount} hotels · ${number.format(chain.totals.availableUnits)} available units`;
+      } else {
+        document.querySelector("#chain-panel").hidden = true;
+      }
+      if (["hotel_admin", "chain_admin"].includes(identity.role)) await loadUsers();
+      const now = new Date();
+      document.querySelector("#sync-state").textContent = `Operational data current · ${date.format(now)}`;
+      document.querySelector("#updated-at").textContent = `Last refreshed ${date.format(now)}`;
+    }
+
+    function showError(error) {
+      const message = `<div class="error">Unable to load dashboard: ${escapeHtml(error.message)}</div>`;
+      ids.forEach(id => { document.querySelector(`#${id}`).innerHTML = message; });
+      document.querySelector("#sync-state").textContent = "Dashboard refresh failed";
+    }
+    document.querySelector("#refresh").addEventListener("click", () => load().catch(showError));
+    document.querySelectorAll("[data-route]").forEach(link => {
+      link.addEventListener("click", event => {
+        event.preventDefault();
+        showRoute(link.dataset.route, { push: true });
+      });
+    });
+    addEventListener("popstate", () => showRoute(routeFromPath()));
+    document.querySelector("#logout").addEventListener("click", async () => {
+      await fetch("/v1/auth/logout", { method: "POST" });
+      location.replace("/login");
+    });
+    document.querySelector("#cancel-user").addEventListener("click", resetUserForm);
+    document.querySelector("#user-form").addEventListener("submit", async event => {
+      event.preventDefault();
+      const message = document.querySelector("#user-message");
+      message.textContent = "";
+      const tenantIds = selectedUserTenants();
+      const payload = {
+        displayName: document.querySelector("#user-display").value.trim(),
+        role: document.querySelector("#user-role").value,
+        tenantIds,
+        defaultTenantId: document.querySelector("#user-default").value
+      };
+      const password = document.querySelector("#user-password").value;
+      if (password) payload.password = password;
+      if (!editingUserId) payload.username = document.querySelector("#user-name").value.trim();
+      try {
+        await request(
+          editingUserId ? `/v1/admin/users/${encodeURIComponent(editingUserId)}` : "/v1/admin/users",
+          {
+            method: editingUserId ? "PUT" : "POST",
+            headers: { "content-type": "application/json", "x-tenant-id": currentIdentity.tenantId },
+            body: JSON.stringify(payload)
+          }
+        );
+        resetUserForm();
+        await loadUsers();
+      } catch (error) {
+        message.textContent = error.message;
+      }
+    });
+    load().catch(showError);
+    setInterval(() => load().catch(showError), 60000);
+  </script>
+</body>
+</html>

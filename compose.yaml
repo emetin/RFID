@@ -1,0 +1,62 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: globaltex_rfid
+      POSTGRES_USER: globaltex
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
+    ports:
+      - "5432:5432"
+    volumes:
+      - rfid_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U globaltex -d globaltex_rfid"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+    command: ["node", "src/ops/postgres-cli.js", "migrate"]
+    environment:
+      DATABASE_URL: postgresql://globaltex:${POSTGRES_PASSWORD:-local-development-only}@postgres:5432/globaltex_rfid
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+    environment:
+      NODE_ENV: production
+      DATA_STORE: postgres
+      DATABASE_URL: postgresql://globaltex:${POSTGRES_PASSWORD:-local-development-only}@postgres:5432/globaltex_rfid
+      PORT: 8080
+      DEVICE_CREDENTIALS: '{"local-reader":{"tenantId":"globaltex-local","readerId":"local-simulator","secret":"local-device-secret"}}'
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-local-admin}
+      ADMIN_TENANT_ID: globaltex-local
+      ADMIN_IDENTITIES: ${ADMIN_IDENTITIES:-}
+      SESSION_SECRET: ${SESSION_SECRET:-local-docker-session-secret-change-me}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    ports:
+      - "${API_PORT:-8081}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  rfid_postgres:

@@ -1,0 +1,30 @@
+{
+  "name": "globaltex-rfid-platform",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Device-neutral RFID ingestion and hotel inventory MVP",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start:api": "node --disable-warning=ExperimentalWarning src/api/server.js",
+    "demo": "node src/demo.js",
+    "gateway:simulate": "node src/gateway/cli.js simulate",
+    "gateway:stdin": "node src/gateway/cli.js stdin",
+    "adapter:test": "node src/gateway/adapters/conformance-cli.js",
+    "integration:flush": "node src/integrations/cli.js",
+    "backup:create": "node src/ops/backup-cli.js create",
+    "backup:verify": "node src/ops/backup-cli.js verify",
+    "db:migrate": "node src/ops/postgres-cli.js migrate",
+    "db:check": "node src/ops/postgres-cli.js check",
+    "db:test-rls": "node src/ops/postgres-rls-smoke.js",
+    "test:postgres": "node --disable-warning=ExperimentalWarning --test test/postgres-store-live.test.js",
+    "hardware:test-reader": "node src/hardware/qualification-cli.js reader",
+    "hardware:test-writer": "node src/hardware/qualification-cli.js writer",
+    "test": "node --disable-warning=ExperimentalWarning --test"
+  },
+  "dependencies": {
+    "pg": "^8.22.0"
+  }
+}

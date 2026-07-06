@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in · Globaltex RFID</title>
+  <style>
+    :root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #17211d; background: #edf3ef; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; background:
+      radial-gradient(circle at 14% 16%, rgb(62 151 113 / 20%), transparent 28%),
+      radial-gradient(circle at 88% 82%, rgb(46 117 91 / 18%), transparent 24%),
+      #edf3ef; }
+    .shell { width: min(1040px, 100%); min-height: 620px; display: grid; grid-template-columns: 1.08fr .92fr;
+      border: 1px solid rgb(255 255 255 / 70%); border-radius: 28px; overflow: hidden;
+      background: #fff; box-shadow: 0 30px 90px rgb(26 57 44 / 17%); }
+    .story { padding: clamp(38px, 6vw, 76px); color: #fff; display: flex; flex-direction: column;
+      background: radial-gradient(circle at 20% 15%, rgb(105 210 165 / 28%), transparent 33%),
+      linear-gradient(145deg, #0e392b, #0a261f); }
+    .brand { display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 800; letter-spacing: .13em; }
+    .mark { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 13px;
+      background: linear-gradient(145deg, #69d4a7, #258360); box-shadow: 0 12px 28px rgb(0 0 0 / 23%); }
+    .story-main { margin: auto 0; }
+    .eyebrow { color: #8ed7b8; font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+    h1 { margin: 16px 0; max-width: 500px; font-size: clamp(36px, 5vw, 58px); line-height: 1.02; letter-spacing: -.045em; }
+    .story p { max-width: 470px; color: #bcd3ca; line-height: 1.7; }
+    .proof { display: flex; gap: 20px; color: #8faea2; font-size: 11px; }
+    .proof span::before { content: "●"; color: #61d29f; margin-right: 7px; }
+    .form-side { padding: clamp(36px, 6vw, 72px); display: flex; flex-direction: column; justify-content: center; }
+    .form-side h2 { margin: 0; font-size: 29px; letter-spacing: -.03em; }
+    .intro { margin: 9px 0 30px; color: #6a7771; font-size: 14px; line-height: 1.6; }
+    label { display: block; margin: 0 0 8px; color: #52615a; font-size: 12px; font-weight: 750; }
+    input { width: 100%; height: 48px; padding: 0 14px; border: 1px solid #d7e1dc; border-radius: 11px;
+      outline: none; color: #17211d; background: #fbfcfb; font: inherit; transition: .15s; }
+    input:focus { border-color: #3d9671; box-shadow: 0 0 0 4px rgb(61 150 113 / 12%); background: #fff; }
+    .field + .field { margin-top: 18px; }
+    button { width: 100%; height: 49px; margin-top: 24px; border: 0; border-radius: 11px; cursor: pointer;
+      color: #fff; background: linear-gradient(135deg, #206d51, #2a8c68); font-weight: 750;
+      box-shadow: 0 13px 28px rgb(35 128 94 / 22%); }
+    button:hover { filter: brightness(1.04); }
+    button:disabled { opacity: .65; cursor: wait; }
+    .error { min-height: 20px; margin-top: 14px; color: #b43838; font-size: 12px; }
+    .foot { margin-top: 28px; padding-top: 20px; border-top: 1px solid #edf1ee; color: #87928d; font-size: 11px; line-height: 1.6; }
+    @media (max-width: 780px) { .shell { grid-template-columns: 1fr; } .story { min-height: 280px; padding: 34px; }
+      .story-main { margin: 50px 0 30px; } .story h1 { font-size: 36px; } .proof { display: none; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="story">
+      <div class="brand"><span class="mark">G</span><span>GLOBALTEX RFID</span></div>
+      <div class="story-main">
+        <div class="eyebrow">Hotel textile intelligence</div>
+        <h1>Every item.<br>One clear history.</h1>
+        <p>Secure chain-wide control for inventory, custody, reader health and operational exceptions.</p>
+      </div>
+      <div class="proof"><span>Tenant isolated</span><span>Audited operations</span><span>Edge resilient</span></div>
+    </section>
+    <section class="form-side">
+      <h2>Welcome back</h2>
+      <p class="intro">Sign in with your assigned operations account.</p>
+      <form id="login-form">
+        <div class="field"><label for="username">Username</label><input id="username" name="username" autocomplete="username" required autofocus></div>
+        <div class="field"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required></div>
+        <button id="submit" type="submit">Sign in to operations</button>
+        <div class="error" id="error" role="alert"></div>
+      </form>
+      <div class="foot">Access is restricted by role and assigned hotel tenants. Authentication attempts and administrative changes are protected by the platform security boundary.</div>
+    </section>
+  </main>
+  <script>
+    const form = document.querySelector("#login-form");
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      const button = document.querySelector("#submit");
+      const error = document.querySelector("#error");
+      button.disabled = true;
+      button.textContent = "Signing in...";
+      error.textContent = "";
+      try {
+        const response = await fetch("/v1/auth/login", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({
+            username: form.username.value.trim(),
+            password: form.password.value
+          })
+        });
+        if (!response.ok) throw new Error("Username or password is incorrect.");
+        location.replace("/dashboard");
+      } catch (failure) {
+        error.textContent = failure.message;
+        button.disabled = false;
+        button.textContent = "Sign in to operations";
+      }
+    });
+  </script>
+</body>
+</html>

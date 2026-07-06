@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://globaltexusa.com/schemas/rfid/gateway-adapter-config-v1.json",
+  "title": "Globaltex RFID Gateway Adapter Configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["adapter", "gateway"],
+  "properties": {
+    "adapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["specifier", "config"],
+      "properties": {
+        "specifier": { "type": "string", "minLength": 1 },
+        "config": { "type": "object" }
+      }
+    },
+    "gateway": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["apiUrl", "deviceKey", "facilityId", "zoneId"],
+      "properties": {
+        "apiUrl": { "type": "string", "minLength": 1 },
+        "deviceKey": { "type": "string", "minLength": 1 },
+        "facilityId": { "type": "string", "minLength": 1 },
+        "zoneId": { "type": "string", "minLength": 1 },
+        "sessionId": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}
