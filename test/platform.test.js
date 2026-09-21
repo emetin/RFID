@@ -43,6 +43,14 @@ async function authorizedGet(apiUrl, path) {
   });
 }
 
+test("readiness endpoint confirms the backing store is available", async () => {
+  await withServer(async (apiUrl) => {
+    const response = await fetch(`${apiUrl}/ready`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { status: "ready", store: "memory" });
+  });
+});
+
 test("gateway requires consistent evidence before moving inventory to another zone", async () => {
   await withServer(async (apiUrl) => {
     const event = {
@@ -145,8 +153,75 @@ test("admin can import the product CSV and load the English dashboard", async ()
       headers: { authorization }
     });
     assert.equal(inventoryPage.status, 200);
-    assert.match(await inventoryPage.text(), /Inventory by product/);
+    const inventoryHtml = await inventoryPage.text();
+    assert.match(inventoryHtml, /Inventory by product/);
+    assert.match(inventoryHtml, /Product catalog setup/);
+    assert.match(inventoryHtml, /catalog-product-form/);
+    assert.match(inventoryHtml, /catalog-csv-form/);
+    assert.match(inventoryHtml, /asset-csv-form/);
   });
+});
+
+test("customer API isolates tenant catalog and replays idempotent mutations", async () => {
+  const store = new InventoryStore();
+  store.upsertProducts("other-hotel", [{
+    sku: "OTHER-001", name: "Other Hotel Item", category: "Other",
+    unitsPerBox: 1, boxesPerPallet: 1, size: "", color: ""
+  }]);
+  const server = createApp({
+    credentials: { "reader-key": credential },
+    customerApiCredentials: {
+      "customer-secret": {
+        clientId: "hotel-a-erp",
+        tenantId: "hotel-a",
+        scopes: ["catalog:read", "catalog:write", "assets:write", "inventory:read"]
+      }
+    },
+    store
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const apiUrl = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const unauthorized = await fetch(`${apiUrl}/v1/customer/catalog`);
+    assert.equal(unauthorized.status, 401);
+
+    const missingKey = await fetch(`${apiUrl}/v1/customer/catalog`, {
+      method: "POST",
+      headers: {
+        authorization: "Bearer customer-secret",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ products: [] })
+    });
+    assert.equal(missingKey.status, 400);
+
+    const headers = {
+      authorization: "Bearer customer-secret",
+      "content-type": "application/json",
+      "idempotency-key": "catalog-sync-001"
+    };
+    const body = JSON.stringify({ products: [{
+      sku: "HTL-001", name: "Hotel Towel", category: "Towels",
+      unitsPerBox: 24, boxesPerPallet: 20, size: "70x140", color: "White"
+    }] });
+    const imported = await fetch(`${apiUrl}/v1/customer/catalog`, { method: "POST", headers, body });
+    assert.equal(imported.status, 200);
+    assert.deepEqual(await imported.json(), { imported: 1 });
+
+    const replayed = await fetch(`${apiUrl}/v1/customer/catalog`, { method: "POST", headers, body });
+    assert.equal(replayed.status, 200);
+    assert.equal(replayed.headers.get("idempotency-replayed"), "true");
+
+    const catalog = await fetch(`${apiUrl}/v1/customer/catalog`, {
+      headers: { authorization: "Bearer customer-secret" }
+    });
+    assert.equal(catalog.status, 200);
+    const products = (await catalog.json()).products;
+    assert.deepEqual(products.map((item) => item.sku), ["HTL-001"]);
+    assert.equal(products.some((item) => item.sku === "OTHER-001"), false);
+  } finally {
+    server.close();
+  }
 });
 
 test("signed Gateway heartbeat reports degraded queue health to its tenant only", async () => {

@@ -70,7 +70,7 @@ test("adapter SDK rejects incompatible manifests and invalid configuration", () 
 
 test("adapter catalog exposes every supported integration family", async () => {
   const catalog = await adapterCatalog();
-  assert.deepEqual(catalog.builtIns.map((item) => item.id), ["simulate", "stdin"]);
+  assert.deepEqual(catalog.builtIns.map((item) => item.id), ["rru9809usb", "simulate", "stdin"]);
   assert.deepEqual(catalog.families.map((item) => item.family), [
     "llrp",
     "mqtt",

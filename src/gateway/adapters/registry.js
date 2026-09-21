@@ -3,6 +3,7 @@ import { pathToFileURL } from "node:url";
 import { instantiateAdapter, validateAdapterModule } from "./sdk.js";
 
 const BUILT_INS = {
+  rru9809usb: () => import("./rru9809usb.js"),
   simulate: () => import("./simulate.js"),
   stdin: () => import("./stdin.js")
 };

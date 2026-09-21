@@ -6,6 +6,7 @@ import { calculatePackaging } from "./packaging.js";
 import { gatewayStatus } from "./gateway-health.js";
 import { movementDecision } from "./movement-policy.js";
 import { ASSET_STATUSES, validateAssetTransition } from "./asset-lifecycle.js";
+import { commissioningEvent, receivingEvent, shippingEvent } from "../standards/epcis.js";
 
 const MIGRATION = readFileSync(
   new URL("../../db/sqlite/001_initial.sql", import.meta.url),
@@ -55,6 +56,11 @@ export class SqliteStore {
 
   close() {
     this.#database.close();
+  }
+
+  readinessCheck() {
+    this.#database.prepare("SELECT 1 AS ready").get();
+    return { status: "ready", store: "sqlite" };
   }
 
   createAdminUser({
@@ -210,6 +216,163 @@ export class SqliteStore {
         );
       }
       return { imported: products.length };
+    });
+  }
+
+  createEncodingBatch(tenantId, {
+    sku, requestedQuantity, epcScheme = "GTX96",
+    batchId = randomUUID(), createdAt = new Date().toISOString()
+  }) {
+    const quantity = Number(requestedQuantity);
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100_000) {
+      throw new Error("requestedQuantity must be an integer between 1 and 100000");
+    }
+    if (epcScheme !== "GTX96") throw new Error("Unsupported EPC scheme");
+    return this.#transaction(() => {
+      const product = this.#database.prepare(`
+        SELECT sku FROM products WHERE tenant_id = ? AND sku = ? AND active = 1
+      `).get(tenantId, sku);
+      if (!product) throw new Error("Unknown or inactive SKU");
+      this.#database.prepare(`
+        INSERT INTO encoding_batches (
+          batch_id, tenant_id, sku, requested_quantity, epc_scheme, status, created_at
+        ) VALUES (?, ?, ?, ?, ?, 'planned', ?)
+      `).run(batchId, tenantId, sku, quantity, epcScheme, createdAt);
+      const allocator = this.#database.prepare(`
+        SELECT next_serial FROM epc_allocator WHERE namespace = 'GTX96'
+      `).get();
+      let serial = BigInt(allocator.next_serial);
+      const insert = this.#database.prepare(`
+        INSERT INTO encoding_jobs (
+          job_id, batch_id, tenant_id, sequence_number, epc, status, updated_at
+        ) VALUES (?, ?, ?, ?, ?, 'queued', ?)
+      `);
+      for (let sequence = 1; sequence <= quantity; sequence += 1) {
+        insert.run(
+          randomUUID(), batchId, tenantId, sequence,
+          `475458${serial.toString(16).toUpperCase().padStart(18, "0")}`,
+          createdAt
+        );
+        serial += 1n;
+      }
+      this.#database.prepare(`
+        UPDATE epc_allocator SET next_serial = ? WHERE namespace = 'GTX96'
+      `).run(serial.toString());
+      return this.#encodingBatch(tenantId, batchId);
+    });
+  }
+
+  encodingBatchesFor(tenantId, { limit = 100 } = {}) {
+    const rows = this.#database.prepare(`
+      SELECT batch_id FROM encoding_batches
+      WHERE tenant_id = ? ORDER BY created_at DESC LIMIT ?
+    `).all(tenantId, Math.min(Math.max(Number(limit) || 100, 1), 500));
+    return rows.map((row) => this.#encodingBatch(tenantId, row.batch_id));
+  }
+
+  encodingBatchFor(tenantId, batchId) {
+    return this.#encodingBatch(tenantId, batchId);
+  }
+
+  claimEncodingJob(tenantId, {
+    stationId, leaseSeconds = 60, now = new Date().toISOString()
+  }) {
+    if (!stationId) throw new Error("stationId is required");
+    const seconds = Math.min(Math.max(Number(leaseSeconds) || 60, 15), 600);
+    return this.#transaction(() => {
+      this.#database.prepare(`
+        UPDATE encoding_jobs SET status = 'queued', station_id = NULL,
+          lease_token = NULL, lease_until = NULL, updated_at = ?
+        WHERE tenant_id = ? AND status = 'leased' AND lease_until <= ?
+      `).run(now, tenantId, now);
+      const job = this.#database.prepare(`
+        SELECT * FROM encoding_jobs
+        WHERE tenant_id = ? AND status = 'queued'
+        ORDER BY batch_id, sequence_number LIMIT 1
+      `).get(tenantId);
+      if (!job) return null;
+      const leaseToken = randomUUID();
+      const leaseUntil = new Date(Date.parse(now) + seconds * 1000).toISOString();
+      this.#database.prepare(`
+        UPDATE encoding_jobs SET status = 'leased', station_id = ?, lease_token = ?,
+          lease_until = ?, attempts = attempts + 1, updated_at = ?
+        WHERE job_id = ? AND status = 'queued'
+      `).run(stationId, leaseToken, leaseUntil, now, job.job_id);
+      this.#database.prepare(`
+        UPDATE encoding_batches SET status = 'encoding', started_at = COALESCE(started_at, ?)
+        WHERE batch_id = ? AND status = 'planned'
+      `).run(now, job.batch_id);
+      return {
+        jobId: job.job_id, batchId: job.batch_id, sequenceNumber: job.sequence_number,
+        epc: job.epc, stationId, leaseToken, leaseUntil, attempts: job.attempts + 1
+      };
+    });
+  }
+
+  finishEncodingJob(tenantId, {
+    jobId, stationId, leaseToken, observedEpc = null, tid = null,
+    previousEpc = null, errorCode = null, errorMessage = null,
+    now = new Date().toISOString()
+  }) {
+    return this.#transaction(() => {
+      const job = this.#database.prepare(`
+        SELECT job.*, batch.sku, batch.requested_quantity
+        FROM encoding_jobs job JOIN encoding_batches batch ON batch.batch_id = job.batch_id
+        WHERE job.tenant_id = ? AND job.job_id = ?
+      `).get(tenantId, jobId);
+      if (!job) throw new Error("Unknown encoding job");
+      if (job.status !== "leased" || job.station_id !== stationId || job.lease_token !== leaseToken) {
+        throw new Error("Encoding job lease is not owned by this station");
+      }
+      if (job.lease_until <= now) throw new Error("Encoding job lease expired");
+      const verified = !errorCode && observedEpc === job.epc;
+      const finalErrorCode = verified ? null : (errorCode || "readback_mismatch");
+      const finalErrorMessage = verified ? null : (errorMessage || "Observed EPC does not match allocation");
+      this.#database.prepare(`
+        UPDATE encoding_jobs SET status = ?, previous_epc = ?, tid = ?, error_code = ?,
+          error_message = ?, written_at = ?, verified_at = ?, lease_token = NULL,
+          lease_until = NULL, updated_at = ? WHERE job_id = ?
+      `).run(
+        verified ? "verified" : "failed", previousEpc, tid,
+        finalErrorCode, finalErrorMessage, now, verified ? now : null, now, jobId
+      );
+      if (verified) {
+        this.#database.prepare(`
+          INSERT INTO rfid_assets (tenant_id, epc, sku, tid, status, encoded_at)
+          VALUES (?, ?, ?, ?, 'active', ?)
+          ON CONFLICT (tenant_id, epc) DO NOTHING
+        `).run(tenantId, job.epc, job.sku, tid, now);
+      } else {
+        const allocator = this.#database.prepare(`
+          SELECT next_serial FROM epc_allocator WHERE namespace = 'GTX96'
+        `).get();
+        const serial = BigInt(allocator.next_serial);
+        const nextSequence = this.#database.prepare(`
+          SELECT COALESCE(MAX(sequence_number), 0) + 1 AS value
+          FROM encoding_jobs WHERE batch_id = ?
+        `).get(job.batch_id).value;
+        this.#database.prepare(`
+          INSERT INTO encoding_jobs (
+            job_id, batch_id, tenant_id, sequence_number, epc, status, updated_at
+          ) VALUES (?, ?, ?, ?, ?, 'queued', ?)
+        `).run(
+          randomUUID(), job.batch_id, tenantId, nextSequence,
+          `475458${serial.toString(16).toUpperCase().padStart(18, "0")}`, now
+        );
+        this.#database.prepare(`
+          UPDATE epc_allocator SET next_serial = ? WHERE namespace = 'GTX96'
+        `).run((serial + 1n).toString());
+      }
+      const verifiedCount = this.#database.prepare(`
+        SELECT COUNT(*) AS count FROM encoding_jobs
+        WHERE batch_id = ? AND status = 'verified'
+      `).get(job.batch_id).count;
+      if (verifiedCount >= job.requested_quantity) {
+        this.#database.prepare(`
+          UPDATE encoding_batches SET status = 'completed', completed_at = ? WHERE batch_id = ?
+        `).run(now, job.batch_id);
+      }
+      return { verified, job: this.#encodingJob(jobId), batch: this.#encodingBatch(tenantId, job.batch_id) };
     });
   }
 
@@ -473,13 +636,198 @@ export class SqliteStore {
     });
   }
 
+  createReceivingBatch({
+    tenantId,
+    sku,
+    expectedQuantity,
+    facilityId,
+    zoneId,
+    reference = null,
+    batchId = randomUUID(),
+    createdAt = new Date().toISOString()
+  }) {
+    if (!Number.isInteger(expectedQuantity) || expectedQuantity < 1) {
+      throw new Error("Expected quantity must be a positive integer");
+    }
+    if (!this.#database.prepare(`
+      SELECT 1 FROM products WHERE tenant_id = ? AND sku = ?
+    `).get(tenantId, sku)) throw new Error(`Unknown SKU: ${sku}`);
+    const location = this.validateLocation({ tenantId, facilityId, zoneId, required: true });
+    if (!location.valid) throw new Error(`Invalid receiving location: ${location.reason}`);
+    this.#database.prepare(`
+      INSERT INTO receiving_batches (
+        batch_id, tenant_id, sku, expected_quantity, facility_id,
+        zone_id, reference, status, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?)
+    `).run(batchId, tenantId, sku, expectedQuantity, facilityId, zoneId, reference, createdAt);
+    return this.receivingBatchFor(tenantId, batchId);
+  }
+
+  receivingBatchesFor(tenantId) {
+    return this.#database.prepare(`
+      SELECT batch_id FROM receiving_batches
+      WHERE tenant_id = ? ORDER BY created_at DESC
+    `).all(tenantId).map((row) => this.receivingBatchFor(tenantId, row.batch_id));
+  }
+
+  receivingBatchFor(tenantId, batchId) {
+    const row = this.#database.prepare(`
+      SELECT * FROM receiving_batches WHERE tenant_id = ? AND batch_id = ?
+    `).get(tenantId, batchId);
+    if (!row) throw new Error("Unknown receiving batch");
+    const tags = this.#database.prepare(`
+      SELECT tag.epc, tag.first_seen_at, tag.last_seen_at, tag.read_count,
+             asset.tenant_id AS existing_tenant_id, asset.sku AS existing_sku
+      FROM receiving_batch_tags tag
+      LEFT JOIN rfid_assets asset ON asset.epc = tag.epc
+      WHERE tag.batch_id = ? ORDER BY tag.epc
+    `).all(batchId).map((tag) => ({
+      epc: tag.epc,
+      firstSeenAt: tag.first_seen_at,
+      lastSeenAt: tag.last_seen_at,
+      readCount: tag.read_count,
+      existingTenantId: tag.existing_tenant_id ?? null,
+      existingSku: tag.existing_sku ?? null
+    }));
+    const conflictEpcs = tags.filter((tag) => tag.existingTenantId).map((tag) => tag.epc);
+    return {
+      batchId: row.batch_id,
+      tenantId: row.tenant_id,
+      sku: row.sku,
+      expectedQuantity: row.expected_quantity,
+      facilityId: row.facility_id,
+      zoneId: row.zone_id,
+      reference: row.reference,
+      status: row.status,
+      createdAt: row.created_at,
+      approvedAt: row.approved_at,
+      approvedBy: row.approved_by,
+      tags,
+      scannedQuantity: tags.length,
+      remainingQuantity: Math.max(row.expected_quantity - tags.length, 0),
+      overageQuantity: Math.max(tags.length - row.expected_quantity, 0),
+      conflictEpcs,
+      canApprove: row.status === "draft" &&
+        tags.length === row.expected_quantity && conflictEpcs.length === 0
+    };
+  }
+
+  addReceivingBatchReads({
+    tenantId,
+    batchId,
+    epcs,
+    observedAt = new Date().toISOString()
+  }) {
+    const batch = this.receivingBatchFor(tenantId, batchId);
+    if (batch.status !== "draft") throw new Error("Receiving batch is not open");
+    const upsert = this.#database.prepare(`
+      INSERT INTO receiving_batch_tags (
+        batch_id, epc, first_seen_at, last_seen_at, read_count
+      ) VALUES (?, ?, ?, ?, 1)
+      ON CONFLICT (batch_id, epc) DO UPDATE SET
+        last_seen_at = excluded.last_seen_at,
+        read_count = receiving_batch_tags.read_count + 1
+    `);
+    this.#transaction(() => {
+      for (const value of epcs) {
+        const epc = String(value ?? "").toUpperCase();
+        if (!/^[0-9A-F]{8,96}$/.test(epc)) throw new Error(`Invalid EPC: ${epc}`);
+        upsert.run(batchId, epc, observedAt, observedAt);
+      }
+    });
+    return this.receivingBatchFor(tenantId, batchId);
+  }
+
+  removeReceivingBatchTag({ tenantId, batchId, epc }) {
+    const batch = this.receivingBatchFor(tenantId, batchId);
+    if (batch.status !== "draft") throw new Error("Receiving batch is not open");
+    this.#database.prepare(`
+      DELETE FROM receiving_batch_tags WHERE batch_id = ? AND epc = ?
+    `).run(batchId, String(epc).toUpperCase());
+    return this.receivingBatchFor(tenantId, batchId);
+  }
+
+  approveReceivingBatch({ tenantId, batchId, actorId, approvedAt = new Date().toISOString() }) {
+    return this.#transaction(() => {
+      const detail = this.receivingBatchFor(tenantId, batchId);
+      if (detail.status !== "draft") throw new Error("Receiving batch is not open");
+      if (!detail.canApprove) {
+        throw new Error("Expected quantity, scanned tags and EPC conflicts must reconcile before approval");
+      }
+      const insertAsset = this.#database.prepare(`
+        INSERT INTO rfid_assets (tenant_id, epc, sku, status, encoded_at)
+        VALUES (?, ?, ?, 'active', ?)
+      `);
+      const insertLifecycle = this.#database.prepare(`
+        INSERT INTO asset_lifecycle_history (
+          history_id, tenant_id, epc, from_status, to_status,
+          reason, actor_id, changed_at
+        ) VALUES (?, ?, ?, NULL, 'active', 'receiving_batch_approval', ?, ?)
+      `);
+      const insertCustody = this.#database.prepare(`
+        INSERT INTO asset_custody_history (
+          custody_id, epc, tenant_id, facility_id, shipment_id,
+          change_type, valid_from, recorded_at
+        ) VALUES (?, ?, ?, ?, NULL, 'receiving_batch_approved', ?, ?)
+      `);
+      const insertPosition = this.#database.prepare(`
+        INSERT INTO inventory_positions (
+          tenant_id, epc, facility_id, zone_id, reader_id, session_id,
+          first_seen_at, last_seen_at, read_count, last_rssi, last_antenna
+        ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, NULL, NULL)
+      `);
+      for (const tag of detail.tags) {
+        insertAsset.run(tenantId, tag.epc, detail.sku, approvedAt);
+        insertLifecycle.run(randomUUID(), tenantId, tag.epc, actorId, approvedAt);
+        insertCustody.run(
+          randomUUID(), tag.epc, tenantId, detail.facilityId, approvedAt, approvedAt
+        );
+        insertPosition.run(
+          tenantId,
+          tag.epc,
+          detail.facilityId,
+          detail.zoneId,
+          `receiving-batch:${batchId}`,
+          tag.firstSeenAt,
+          tag.lastSeenAt,
+          tag.readCount
+        );
+      }
+      this.#database.prepare(`
+        UPDATE receiving_batches
+        SET status = 'approved', approved_at = ?, approved_by = ?
+        WHERE tenant_id = ? AND batch_id = ?
+      `).run(approvedAt, actorId, tenantId, batchId);
+      this.recordAudit({
+        tenantId,
+        actorId,
+        actorRole: "chain_admin",
+        action: "receiving_batch.approved",
+        entityType: "receiving_batch",
+        entityId: batchId,
+        details: {
+          sku: detail.sku,
+          quantity: detail.scannedQuantity,
+          epcis: commissioningEvent({
+            epcs: detail.tags.map((tag) => tag.epc),
+            eventTime: approvedAt,
+            businessLocation: detail.facilityId
+          })
+        },
+        createdAt: approvedAt
+      });
+      return this.receivingBatchFor(tenantId, batchId);
+    });
+  }
+
   createShipment({
     tenantId,
     customerTenantId,
     destinationFacilityId,
     reference = null,
     epcs,
-    shipmentId = randomUUID()
+    shipmentId = randomUUID(),
+    actorId = "system"
   }) {
     if (!customerTenantId || customerTenantId === tenantId) {
       throw new Error("A different customerTenantId is required");
@@ -503,6 +851,7 @@ export class SqliteStore {
       VALUES (?, ?, ?)
     `);
 
+    const createdAt = new Date().toISOString();
     this.#transaction(() => {
       const assets = normalized.map((epc) => {
         const found = asset.get(tenantId, epc);
@@ -515,9 +864,29 @@ export class SqliteStore {
         customerTenantId,
         destinationFacilityId,
         reference,
-        new Date().toISOString()
+        createdAt
       );
       for (const item of assets) insertAsset.run(shipmentId, item.epc, item.sku);
+    });
+    this.recordAudit({
+      tenantId,
+      actorId,
+      actorRole: "chain_admin",
+      action: "shipment.shipping",
+      entityType: "shipment",
+      entityId: shipmentId,
+      details: {
+        reference,
+        quantity: normalized.length,
+        epcis: shippingEvent({
+          epcs: normalized,
+          eventTime: createdAt,
+          source: tenantId,
+          destination: customerTenantId,
+          transaction: reference
+        })
+      },
+      createdAt
     });
     return this.#shipmentForTenant(tenantId, shipmentId);
   }
@@ -562,6 +931,7 @@ export class SqliteStore {
     const missing = [...expected].filter((epc) => !scanned.has(epc));
     const unexpected = [...scanned].filter((epc) => !expected.has(epc));
 
+    let acceptanceTime = null;
     if (accept) {
       this.#transaction(() => {
         const sourceProduct = this.#database.prepare(`
@@ -594,6 +964,7 @@ export class SqliteStore {
           ) VALUES (?, ?, ?, ?, ?, 'shipment_received', ?, ?)
         `);
         const acceptedAt = new Date().toISOString();
+        acceptanceTime = acceptedAt;
 
         for (const epc of received) {
           const manifestAsset = manifest.find((item) => item.epc === epc);
@@ -700,6 +1071,28 @@ export class SqliteStore {
             details: { destinationFacilityId: shipment.destination_facility_id }
           });
         }
+      });
+      this.recordAudit({
+        tenantId,
+        actorId: "shipment_acceptance",
+        actorRole: "hotel_admin",
+        action: "shipment.receiving",
+        entityType: "shipment",
+        entityId: shipmentId,
+        details: {
+          quantity: received.length,
+          missing: missing.length,
+          unexpected: unexpected.length,
+          ...(received.length ? { epcis: receivingEvent({
+            epcs: received,
+            eventTime: acceptanceTime,
+            businessLocation: shipment.destination_facility_id,
+            source: shipment.supplier_tenant_id,
+            destination: tenantId,
+            transaction: shipment.reference
+          }) } : {})
+        },
+        createdAt: acceptanceTime
       });
     }
 
@@ -1382,6 +1775,46 @@ export class SqliteStore {
     });
   }
 
+  consumeCustomerApiRateLimit(clientId, windowStart, limit) {
+    this.#database.prepare(`
+      INSERT INTO customer_api_rate_limits (client_id, window_start, request_count)
+      VALUES (?, ?, 1)
+      ON CONFLICT (client_id, window_start)
+      DO UPDATE SET request_count = request_count + 1
+    `).run(clientId, windowStart);
+    const row = this.#database.prepare(`
+      SELECT request_count FROM customer_api_rate_limits
+      WHERE client_id = ? AND window_start = ?
+    `).get(clientId, windowStart);
+    this.#database.prepare(`
+      DELETE FROM customer_api_rate_limits WHERE window_start < ?
+    `).run(windowStart - 2);
+    return { allowed: row.request_count <= limit, count: row.request_count };
+  }
+
+  customerApiIdempotencyGet({ tenantId, clientId, method, path, idempotencyKey }) {
+    const row = this.#database.prepare(`
+      SELECT response_json FROM customer_api_idempotency
+      WHERE tenant_id = ? AND client_id = ? AND method = ? AND path = ? AND idempotency_key = ?
+    `).get(tenantId, clientId, method, path, idempotencyKey);
+    return row ? JSON.parse(row.response_json) : null;
+  }
+
+  customerApiIdempotencyPut({
+    tenantId, clientId, method, path, idempotencyKey, response,
+    createdAt = new Date().toISOString()
+  }) {
+    this.#database.prepare(`
+      INSERT OR IGNORE INTO customer_api_idempotency (
+        tenant_id, client_id, method, path, idempotency_key, response_json, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      tenantId, clientId, method, path, idempotencyKey,
+      JSON.stringify(response), createdAt
+    );
+    return this.customerApiIdempotencyGet({ tenantId, clientId, method, path, idempotencyKey });
+  }
+
   recordAudit({
     tenantId,
     actorId,
@@ -1984,6 +2417,41 @@ export class SqliteStore {
       availableUnits: statusCounts.active,
       statusCounts,
       lines
+    };
+  }
+
+  #encodingJob(jobId) {
+    const row = this.#database.prepare(`SELECT * FROM encoding_jobs WHERE job_id = ?`).get(jobId);
+    if (!row) return null;
+    return {
+      jobId: row.job_id, batchId: row.batch_id, sequenceNumber: row.sequence_number,
+      epc: row.epc, status: row.status, stationId: row.station_id,
+      leaseUntil: row.lease_until, attempts: row.attempts, previousEpc: row.previous_epc,
+      tid: row.tid, errorCode: row.error_code, errorMessage: row.error_message,
+      writtenAt: row.written_at, verifiedAt: row.verified_at, updatedAt: row.updated_at
+    };
+  }
+
+  #encodingBatch(tenantId, batchId) {
+    const row = this.#database.prepare(`
+      SELECT batch.*,
+        SUM(CASE WHEN job.status = 'queued' THEN 1 ELSE 0 END) AS queued_count,
+        SUM(CASE WHEN job.status = 'leased' THEN 1 ELSE 0 END) AS leased_count,
+        SUM(CASE WHEN job.status = 'verified' THEN 1 ELSE 0 END) AS verified_count,
+        SUM(CASE WHEN job.status = 'failed' THEN 1 ELSE 0 END) AS failed_count,
+        COUNT(job.job_id) AS total_jobs
+      FROM encoding_batches batch
+      LEFT JOIN encoding_jobs job ON job.batch_id = batch.batch_id
+      WHERE batch.tenant_id = ? AND batch.batch_id = ?
+      GROUP BY batch.batch_id
+    `).get(tenantId, batchId);
+    if (!row) return null;
+    return {
+      batchId: row.batch_id, tenantId: row.tenant_id, sku: row.sku,
+      requestedQuantity: row.requested_quantity, epcScheme: row.epc_scheme,
+      status: row.status, queued: row.queued_count, leased: row.leased_count,
+      verified: row.verified_count, failed: row.failed_count, totalJobs: row.total_jobs,
+      createdAt: row.created_at, startedAt: row.started_at, completedAt: row.completed_at
     };
   }
 

@@ -23,7 +23,7 @@ if (!credentials) {
   credentials = {
     "local-reader": {
       tenantId: "globaltex-local",
-      readerId: "local-simulator",
+      readerId: "local-reader",
       secret: "local-device-secret"
     }
   };
@@ -37,6 +37,16 @@ try {
     : null;
 } catch {
   console.error("ADMIN_IDENTITIES must be valid JSON. See .env.example.");
+  process.exit(1);
+}
+
+let customerApiCredentials;
+try {
+  customerApiCredentials = process.env.CUSTOMER_API_CREDENTIALS
+    ? JSON.parse(process.env.CUSTOMER_API_CREDENTIALS)
+    : {};
+} catch {
+  console.error("CUSTOMER_API_CREDENTIALS must be valid JSON. See .env.example.");
   process.exit(1);
 }
 
@@ -55,6 +65,30 @@ const dataStore = process.env.DATA_STORE ?? "sqlite";
 if (!["sqlite", "postgres"].includes(dataStore)) {
   console.error("DATA_STORE must be sqlite or postgres.");
   process.exit(1);
+}
+if (production) {
+  const errors = [];
+  if (dataStore !== "postgres") errors.push("DATA_STORE must be postgres");
+  if (process.env.COOKIE_SECURE !== "true") errors.push("COOKIE_SECURE must be true");
+  if (!String(process.env.PUBLIC_BASE_URL ?? "").startsWith("https://")) {
+    errors.push("PUBLIC_BASE_URL must use https://");
+  }
+  for (const [key, value] of Object.entries(credentials)) {
+    if (String(value.secret ?? "").length < 32) errors.push(`device secret ${key} must be at least 32 characters`);
+  }
+  const adminTokens = adminIdentities
+    ? Object.keys(adminIdentities)
+    : [process.env.ADMIN_TOKEN];
+  if (adminTokens.some((token) => String(token ?? "").length < 32)) {
+    errors.push("admin bootstrap tokens must be at least 32 characters");
+  }
+  if (Object.keys(customerApiCredentials).some((token) => token.length < 32)) {
+    errors.push("customer API tokens must be at least 32 characters");
+  }
+  if (errors.length) {
+    console.error(`Production configuration rejected:\n- ${errors.join("\n- ")}`);
+    process.exit(1);
+  }
 }
 const store = dataStore === "postgres"
   ? new PostgresStore()
@@ -80,11 +114,13 @@ if (!production && dataStore === "sqlite" && store.productsFor(localTenantId).le
 
 const server = createApp({
   credentials,
+  customerApiCredentials,
   admin: adminIdentities
     ? { identities: adminIdentities }
-    : {
+      : {
         token: process.env.ADMIN_TOKEN ?? "local-admin",
-        tenantId: localTenantId
+        tenantId: localTenantId,
+        role: process.env.ADMIN_ROLE ?? (production ? "hotel_admin" : "chain_admin")
   },
   store,
   requireProvisionedReaders: production,

@@ -5,6 +5,30 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SqliteStore } from "../src/core/sqlite-store.js";
 
+test("SQLite persists customer API idempotency and rate limits across restart", () => {
+  const directory = mkdtempSync(join(tmpdir(), "globaltex-rfid-api-"));
+  const path = join(directory, "rfid.db");
+  const identity = {
+    tenantId: "hotel-a", clientId: "erp-a", method: "POST",
+    path: "/v1/customer/catalog", idempotencyKey: "sync-001"
+  };
+  try {
+    const first = new SqliteStore(path);
+    assert.deepEqual(first.consumeCustomerApiRateLimit("erp-a", 100, 2), { allowed: true, count: 1 });
+    assert.deepEqual(first.customerApiIdempotencyPut({
+      ...identity, response: { imported: 4 }
+    }), { imported: 4 });
+    first.close();
+
+    const reopened = new SqliteStore(path);
+    assert.deepEqual(reopened.consumeCustomerApiRateLimit("erp-a", 100, 2), { allowed: true, count: 2 });
+    assert.deepEqual(reopened.customerApiIdempotencyGet(identity), { imported: 4 });
+    reopened.close();
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("SQLite preserves products, EPC inventory and sessions after reopening", () => {
   const directory = mkdtempSync(join(tmpdir(), "globaltex-rfid-"));
   const path = join(directory, "rfid.db");
@@ -363,5 +387,85 @@ test("SQLite persists managed admin users and hotel assignments", () => {
     assert.deepEqual(database.adminUserById(created.userId).tenantIds, ["hotel-a", "hotel-b"]);
   } finally {
     database.close();
+  }
+});
+
+test("SQLite encoding orchestration allocates unique EPCs, coordinates stations and replaces failures", () => {
+  const database = new SqliteStore(":memory:");
+  try {
+    database.upsertProducts("factory-a", [{
+      sku: "TOWEL-1", name: "Towel", unitsPerBox: 1, boxesPerPallet: 1
+    }]);
+    const batch = database.createEncodingBatch("factory-a", { sku: "TOWEL-1", requestedQuantity: 2 });
+    assert.equal(batch.queued, 2);
+
+    const first = database.claimEncodingJob("factory-a", { stationId: "writer-a" });
+    const second = database.claimEncodingJob("factory-a", { stationId: "writer-b" });
+    assert.notEqual(first.jobId, second.jobId);
+    assert.notEqual(first.epc, second.epc);
+    assert.throws(() => database.finishEncodingJob("factory-a", {
+      jobId: first.jobId, stationId: "writer-b", leaseToken: first.leaseToken,
+      observedEpc: first.epc
+    }), /lease is not owned/);
+
+    const failed = database.finishEncodingJob("factory-a", {
+      jobId: first.jobId, stationId: "writer-a", leaseToken: first.leaseToken,
+      observedEpc: "000000000000000000000000"
+    });
+    assert.equal(failed.verified, false);
+    assert.equal(failed.batch.failed, 1);
+    assert.equal(failed.batch.queued, 1);
+
+    database.finishEncodingJob("factory-a", {
+      jobId: second.jobId, stationId: "writer-b", leaseToken: second.leaseToken,
+      observedEpc: second.epc, tid: "E280TEST2"
+    });
+    const replacement = database.claimEncodingJob("factory-a", { stationId: "writer-c" });
+    assert.notEqual(replacement.epc, first.epc);
+    assert.notEqual(replacement.epc, second.epc);
+    const completed = database.finishEncodingJob("factory-a", {
+      jobId: replacement.jobId, stationId: "writer-c", leaseToken: replacement.leaseToken,
+      observedEpc: replacement.epc, tid: "E280TEST3"
+    });
+    assert.equal(completed.batch.status, "completed");
+    assert.equal(completed.batch.verified, 2);
+    assert.equal(completed.batch.failed, 1);
+  } finally {
+    database.close();
+  }
+});
+
+test("SQLite encoding leases recover after expiry and allocator survives restart", () => {
+  const directory = mkdtempSync(join(tmpdir(), "globaltex-rfid-encoding-"));
+  const path = join(directory, "rfid.db");
+  try {
+    const firstStore = new SqliteStore(path);
+    firstStore.upsertProducts("factory-a", [{
+      sku: "SHEET-1", name: "Sheet", unitsPerBox: 1, boxesPerPallet: 1
+    }]);
+    firstStore.createEncodingBatch("factory-a", { sku: "SHEET-1", requestedQuantity: 1 });
+    const firstClaim = firstStore.claimEncodingJob("factory-a", {
+      stationId: "writer-a", now: "2026-07-21T10:00:00.000Z", leaseSeconds: 15
+    });
+    firstStore.close();
+
+    const reopened = new SqliteStore(path);
+    const recovered = reopened.claimEncodingJob("factory-a", {
+      stationId: "writer-b", now: "2026-07-21T10:00:16.000Z", leaseSeconds: 15
+    });
+    assert.equal(recovered.jobId, firstClaim.jobId);
+    assert.notEqual(recovered.leaseToken, firstClaim.leaseToken);
+    assert.equal(recovered.attempts, 2);
+    reopened.finishEncodingJob("factory-a", {
+      jobId: recovered.jobId, stationId: "writer-b", leaseToken: recovered.leaseToken,
+      observedEpc: recovered.epc, now: "2026-07-21T10:00:17.000Z"
+    });
+    const nextBatch = reopened.createEncodingBatch("factory-a", { sku: "SHEET-1", requestedQuantity: 1 });
+    const next = reopened.claimEncodingJob("factory-a", { stationId: "writer-c" });
+    assert.notEqual(next.epc, recovered.epc);
+    assert.equal(next.batchId, nextBatch.batchId);
+    reopened.close();
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
 });

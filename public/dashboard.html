@@ -26,7 +26,7 @@
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
     body { margin: 0; min-height: 100vh; background: var(--canvas); }
-    button, select { font: inherit; }
+    button, select, input { font: inherit; }
     .shell { min-height: 100vh; }
     .page[hidden] { display: none !important; }
     .page { animation: page-in .16s ease-out; }
@@ -44,22 +44,26 @@
       flex-direction: column;
       z-index: 10;
     }
-    .brand { display: flex; gap: 10px; align-items: center; padding: 0 7px 22px; }
-    .brand-mark {
-      width: 34px; height: 34px; border-radius: 10px;
-      display: grid; place-items: center;
-      background: linear-gradient(145deg, #62d2a4, #2c8b67);
-      box-shadow: inset 0 1px 0 rgb(255 255 255 / 35%), 0 12px 30px rgb(0 0 0 / 22%);
-      font-weight: 800;
+    .brand { display: flex; align-items: center; justify-content: center; min-height: 58px; padding: 0 7px 22px; }
+    .brand-logo {
+      display: block; width: 176px; height: auto; object-fit: contain;
+      filter: drop-shadow(0 7px 14px rgb(0 0 0 / 18%));
     }
-    .brand strong { display: block; font-size: 11px; letter-spacing: .12em; }
-    .brand span { display: block; margin-top: 2px; color: #a9c7bb; font-size: 9px; }
     nav { display: grid; gap: 5px; }
     nav a {
       color: #bad0c7; text-decoration: none; padding: 9px 10px;
       border-radius: 8px; font-size: 11px; font-weight: 600; transition: .16s ease;
     }
     nav a:hover, nav a.active { color: #fff; background: rgb(255 255 255 / 9%); }
+    .nav-more summary {
+      list-style: none; color: #bad0c7; padding: 9px 10px; border-radius: 8px;
+      font-size: 11px; font-weight: 600; cursor: pointer;
+    }
+    .nav-more summary::-webkit-details-marker { display: none; }
+    .nav-more summary::after { content: "+"; float: right; }
+    .nav-more[open] summary::after { content: "âˆ’"; }
+    .nav-more summary:hover, .nav-more[open] summary { color: #fff; background: rgb(255 255 255 / 9%); }
+    .nav-more div { display: grid; gap: 4px; padding: 4px 0 0 9px; }
     .sidebar-foot {
       margin-top: auto; padding: 16px 12px 4px; color: #91aea2;
       border-top: 1px solid rgb(255 255 255 / 10%); font-size: 9px; line-height: 1.6;
@@ -71,6 +75,18 @@
       background: rgb(255 255 255 / 88%); border-bottom: 1px solid var(--line);
       backdrop-filter: blur(16px); position: sticky; top: 0; z-index: 8;
     }
+    .language-select {
+      min-width: 112px;
+      padding: 8px 30px 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
     .context { display: flex; align-items: center; gap: 12px; min-width: 0; }
     .context-dot { width: 9px; height: 9px; border-radius: 50%; background: #2eb67d; box-shadow: 0 0 0 5px #dff5ea; }
     .context strong { display: block; font-size: 11px; }
@@ -81,9 +97,18 @@
       background: #fff; color: var(--ink); padding: 0 9px; font-size: 10px;
     }
     select { max-width: 210px; }
-    .button { cursor: pointer; font-weight: 650; }
-    .button:hover { border-color: #91b8a7; background: #f7faf8; }
-    .button.danger { color: #a22e2e; }
+    .button {
+      display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+      cursor: pointer; font-weight: 750; border-color: var(--green-800); color: #fff;
+      background: linear-gradient(135deg, var(--green-800), var(--green-600));
+      box-shadow: 0 7px 16px rgb(23 76 58 / 16%); transition: .16s ease;
+    }
+    .button:hover { border-color: var(--green-600); background: linear-gradient(135deg, #123d30, #1d7455); transform: translateY(-1px); }
+    .button:active { transform: translateY(0); box-shadow: 0 3px 9px rgb(23 76 58 / 14%); }
+    .button:focus-visible { outline: 3px solid rgb(35 128 94 / 20%); outline-offset: 2px; }
+    .button.danger { color: #a22e2e; border-color: #efcaca; background: #fff; box-shadow: none; }
+    .button.danger:hover { background: #fff5f5; border-color: #d99b9b; }
+    .button:disabled { cursor: not-allowed; opacity: .5; transform: none; box-shadow: none; }
     main { padding: 22px clamp(18px, 3vw, 34px) 44px; }
     .hero {
       display: flex; justify-content: space-between; align-items: flex-end; gap: 24px;
@@ -137,6 +162,15 @@
     th { color: #718079; background: #fafcfb; font-size: 8px; text-transform: uppercase; letter-spacing: .07em; }
     tbody tr:last-child td { border-bottom: 0; }
     tbody tr:hover td { background: #fbfdfc; }
+    .inventory-responsive { overflow-x: visible; }
+    .inventory-responsive table { table-layout: fixed; }
+    .inventory-responsive th, .inventory-responsive td { white-space: normal; overflow-wrap: anywhere; vertical-align: middle; }
+    .inventory-table th:nth-child(1), .inventory-table td:nth-child(1) { width: 18%; }
+    .inventory-table th:nth-child(2), .inventory-table td:nth-child(2) { width: 42%; }
+    .inventory-table th:nth-child(n+3), .inventory-table td:nth-child(n+3) { width: 10%; text-align: right; }
+    .zoho-table th:first-child, .zoho-table td:first-child { width: 18%; }
+    .zoho-table th:nth-child(2), .zoho-table td:nth-child(2) { width: 30%; text-align: left; }
+    .zoho-table th:nth-child(n+3), .zoho-table td:nth-child(n+3) { width: 13%; text-align: right; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
     .badge {
       display: inline-flex; align-items: center; padding: 5px 8px; border-radius: 999px;
@@ -153,34 +187,96 @@
     .user-form { padding: 14px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; border-bottom: 1px solid var(--line); background: #fbfcfb; }
     .user-form label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
     .user-form input, .user-form select { width: 100%; height: 34px; border: 1px solid #d7e0db; border-radius: 8px; padding: 0 9px; background: #fff; font-size: 10px; }
+    .user-form input:focus, .user-form select:focus { border-color: #6fae94; outline: 3px solid rgb(35 128 94 / 10%); }
+    .user-form input[type="file"] { height: 42px; padding: 5px; color: var(--muted); cursor: pointer; border-style: dashed; background: #f8fbf9; }
+    .user-form input[type="file"]::file-selector-button { height: 30px; margin-right: 10px; padding: 0 13px; border: 0; border-radius: 7px; color: var(--green-800); background: var(--green-100); font-weight: 800; cursor: pointer; }
+    .user-form input[type="file"]::file-selector-button:hover { background: #ccebdc; }
     .user-form .wide { grid-column: span 2; }
     .tenant-choices { display: flex; flex-wrap: wrap; gap: 7px; padding-top: 2px; }
     .tenant-choice { display: inline-flex !important; align-items: center; gap: 6px; margin: 0 !important; padding: 8px 10px; border: 1px solid #dce5e0; border-radius: 9px; background: #fff; text-transform: none !important; letter-spacing: 0 !important; font-size: 11px !important; }
     .tenant-choice input { width: auto; height: auto; margin: 0; }
     .form-actions { display: flex; gap: 8px; align-items: end; }
+    .form-actions .button { min-height: 36px; padding: 0 15px; white-space: nowrap; }
     .mini-button { border: 1px solid #d7e0db; border-radius: 8px; background: #fff; padding: 7px 9px; cursor: pointer; font-size: 11px; font-weight: 700; }
     .mini-button:hover { background: #f2f7f4; }
     .form-message { grid-column: 1 / -1; min-height: 16px; color: var(--red); font-size: 11px; }
+    .form-message.success { color: var(--green-600); }
+    .workflow-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 14px; }
+    .workflow-step { padding: 14px; border: 1px solid var(--line); border-radius: 11px; color: var(--ink); background: #fff; text-decoration: none; transition: .16s ease; }
+    .workflow-step:hover { border-color: #8ebda9; transform: translateY(-1px); box-shadow: 0 8px 18px rgb(23 76 58 / 8%); }
+    .workflow-step strong { display: block; margin-bottom: 5px; font-size: 11px; }
+    .workflow-step p { margin: 0; color: var(--muted); font-size: 9px; line-height: 1.55; }
+    .standard-note { margin: 0 0 14px; padding: 10px 13px; border: 1px solid #cfe3d9; border-radius: 10px; color: var(--green-800); background: #eef7f2; font-size: 10px; }
+    .asset-picker { grid-column: 1 / -1; max-height: 220px; overflow: auto; padding: 10px; border: 1px solid #d7e0db; border-radius: 8px; background: #fff; }
+    .asset-option { display: grid !important; grid-template-columns: 18px 1fr auto; gap: 8px; align-items: center; margin: 0 !important; padding: 8px 4px; border-bottom: 1px solid #edf1ee; text-transform: none !important; letter-spacing: 0 !important; }
+    .asset-option:last-child { border-bottom: 0; }
+    .asset-option input { width: auto; height: auto; }
+    .progress-box { grid-column: 1 / -1; padding: 11px; border-radius: 9px; background: #eef7f2; color: var(--green-800); font-size: 10px; line-height: 1.5; }
+    .catalog-toolbar { display: grid; grid-template-columns: minmax(220px, 1fr) 180px auto; gap: 10px; align-items: end; padding: 12px 15px; background: #f8fbf9; border-bottom: 1px solid var(--line); }
+    .catalog-toolbar label { display: grid; gap: 5px; color: var(--muted); font-size: 8px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+    .catalog-toolbar input, .catalog-toolbar select { width: 100%; max-width: none; min-height: 36px; border: 1px solid #d7e0db; border-radius: 8px; background: #fff; padding: 0 10px; font-size: 10px; }
+    .catalog-results { align-self: center; color: var(--muted); font-size: 9px; white-space: nowrap; }
+    .mode-safe { border-left: 4px solid var(--green-600); }
+    .mode-write { border-left: 4px solid var(--amber); }
+    .mode-note { padding: 11px 14px; background: #fff8ea; color: #80520f; border-bottom: 1px solid #f1dfbd; font-size: 10px; line-height: 1.55; }
+    .receiving-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 14px; }
+    .receiving-stat { padding: 14px; border: 1px solid var(--line); border-radius: 11px; background: #f8fbf9; }
+    .receiving-stat span { display: block; color: var(--muted); font-size: 8px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+    .receiving-stat strong { display: block; margin-top: 7px; font-size: 24px; }
+    .receiving-meter { height: 12px; margin: 0 14px 14px; overflow: hidden; border-radius: 999px; background: #e5ece8; }
+    .receiving-meter div { height: 100%; width: 0; border-radius: inherit; background: var(--green-600); transition: width .2s ease; }
     @media (max-width: 1240px) { .kpis { grid-template-columns: repeat(3, 1fr); } }
     @media (max-width: 920px) {
       .sidebar { position: static; width: auto; min-height: auto; padding: 18px 20px; }
-      .brand { padding: 0; }
-      nav { display: flex; gap: 4px; margin-top: 14px; overflow-x: auto; }
+      .brand { justify-content: flex-start; min-height: 0; padding: 0; }
+      .brand-logo { width: 170px; height: auto; }
+      nav { display: flex; gap: 4px; margin-top: 14px; overflow-x: auto; scrollbar-width: none; }
+      nav::-webkit-scrollbar { display: none; }
       nav a { flex: 0 0 auto; }
+      .nav-more { flex: 0 0 auto; }
+      .nav-more div { padding-left: 0; }
       .sidebar-foot { display: none; }
       .workspace { margin-left: 0; }
       .topbar { position: static; }
       .layout { grid-template-columns: 1fr; }
+      .workflow-grid { grid-template-columns: 1fr; }
+      .user-form { grid-template-columns: repeat(2, 1fr); }
+      .user-form .wide { grid-column: span 2; }
+      .catalog-toolbar { grid-template-columns: 1fr 180px; }
+      .catalog-results { grid-column: 1 / -1; }
+      .receiving-stats { grid-template-columns: repeat(2, 1fr); }
     }
     @media (max-width: 640px) {
+      .sidebar { padding: 14px 16px; }
+      .brand-logo { width: 150px; height: auto; }
       .topbar, .hero { align-items: stretch; flex-direction: column; }
-      .toolbar { width: 100%; }
-      select { flex: 1; max-width: none; }
+      .topbar { gap: 12px; padding: 12px 16px; }
+      .toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; width: 100%; gap: 7px; }
+      .toolbar select { width: 100%; min-width: 0; max-width: none; }
+      .toolbar .button { padding-inline: 10px; }
       .kpis { grid-template-columns: repeat(2, 1fr); }
       .user-form { grid-template-columns: 1fr; }
       .user-form .wide { grid-column: span 1; }
+      .form-actions .button { width: 100%; }
       .hero { margin-bottom: 22px; }
-      main { padding-top: 24px; }
+      main { padding: 20px 16px 36px; }
+      .panel-head { align-items: flex-start; flex-wrap: wrap; }
+      .panel-head span { width: 100%; }
+      .receiving-stats { grid-template-columns: 1fr 1fr; }
+      .catalog-toolbar { grid-template-columns: 1fr; }
+      .catalog-results { grid-column: auto; }
+    }
+    @media (max-width: 760px) {
+      .inventory-responsive { padding: 10px; background: #f7faf8; }
+      .inventory-responsive table, .inventory-responsive tbody { display: block; }
+      .inventory-responsive thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+      .inventory-responsive tr { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-bottom: 10px; border: 1px solid var(--line); border-radius: 11px; background: #fff; overflow: hidden; }
+      .inventory-responsive tbody tr:last-child { margin-bottom: 0; }
+      .inventory-responsive td, .inventory-responsive td:nth-child(n) { display: grid; grid-template-columns: minmax(92px, .8fr) 1fr; width: auto; padding: 9px 11px; text-align: right; border-bottom: 1px solid #edf1ee; white-space: normal; }
+      .inventory-responsive td::before { content: attr(data-label); color: var(--muted); font-size: 8px; font-weight: 800; letter-spacing: .06em; text-align: left; text-transform: uppercase; }
+      .inventory-responsive td:first-child, .inventory-responsive td:nth-child(2) { grid-column: 1 / -1; text-align: left; }
+      .inventory-responsive td:first-child { background: #f7fbf9; font-weight: 800; }
+      .inventory-responsive td:last-child { border-bottom: 0; }
     }
   </style>
 </head>
@@ -188,17 +284,23 @@
   <div class="shell">
     <aside class="sidebar">
       <div class="brand">
-        <div class="brand-mark">G</div>
-        <div><strong>GLOBALTEX</strong><span>RFID Control Center</span></div>
+        <img class="brand-logo" src="/assets/patak-logo.png?v=2" alt="Patak Tekstil">
       </div>
       <nav aria-label="Dashboard sections">
         <a data-route="overview" href="/dashboard">Overview</a>
-        <a data-route="inventory" href="/dashboard/inventory">Inventory</a>
+        <a data-route="receiving" data-globaltex-only href="/dashboard/receiving">1. Product preparation</a>
+        <a data-route="inventory" href="/dashboard/inventory">2. Envanter</a>
+        <a data-route="deliveries" href="/dashboard/deliveries">3. Shipping & receiving</a>
+        <a data-route="activity" data-globaltex-only href="/dashboard/activity">Activity history</a>
         <a data-route="exceptions" href="/dashboard/exceptions">Exceptions</a>
-        <a data-route="devices" href="/dashboard/devices">Reader health</a>
-        <a data-route="movements" href="/dashboard/movements">Movements</a>
-        <a data-route="activity" href="/dashboard/activity">Activity</a>
-        <a data-route="users" id="users-nav" href="/dashboard/users" hidden>Users & access</a>
+        <details class="nav-more">
+          <summary>Technical settings</summary>
+          <div>
+            <a data-route="devices" href="/dashboard/devices">Reader health</a>
+            <a data-route="movements" href="/dashboard/movements">Movements</a>
+            <a data-route="users" id="users-nav" href="/dashboard/users" hidden>Users & access</a>
+          </div>
+        </details>
       </nav>
       <div class="sidebar-foot">
         Item-level textile visibility<br>
@@ -213,6 +315,11 @@
           <div><strong id="tenant-name">Loading hotel...</strong><small id="sync-state">Connecting to operations API</small></div>
         </div>
         <div class="toolbar">
+          <select class="language-select" id="language-select" aria-label="Language">
+            <option value="en">English</option>
+            <option value="es">Español</option>
+            <option value="tr">Türkçe</option>
+          </select>
           <select id="tenant-select" aria-label="Select hotel" hidden></select>
           <button class="button" id="refresh" type="button">Refresh</button>
           <button class="button danger" id="logout" type="button">Sign out</button>
@@ -222,7 +329,7 @@
       <main>
         <div class="page" data-page="overview">
           <section class="hero">
-            <div><div class="eyebrow">RFID OPERATIONS</div><h1>Hotel textile control</h1><p>Live item visibility and operational health for the selected hotel.</p></div>
+            <div><div class="eyebrow" id="overview-eyebrow">RFID OPERATIONS</div><h1 id="overview-title">Hotel textile control</h1><p id="overview-description">Live item visibility and operational health for the selected hotel.</p></div>
             <div class="role-chip"><span>&bull;</span><span id="identity">Authenticated session</span></div>
           </section>
           <section class="kpis" aria-label="Key metrics">
@@ -233,6 +340,15 @@
             <article class="kpi" style="--tint:#fde5e5"><div class="kpi-label">Reader issues</div><div class="kpi-value" id="reader-issues">&mdash;</div><div class="kpi-note">Offline or degraded</div></article>
             <article class="kpi"><div class="kpi-label">Active alerts</div><div class="kpi-value" id="active-alerts">&mdash;</div><div class="kpi-note">Operational attention</div></article>
           </section>
+          <div class="standard-note" id="standards-note">Checking US RFID standard...</div>
+          <section class="panel" style="margin-bottom:14px">
+            <div class="panel-head"><h2>What would you like to do?</h2><span>Three core operations</span></div>
+            <div class="workflow-grid">
+              <a class="workflow-step" data-globaltex-only href="/dashboard/receiving"><strong>1. Prepare products</strong><p>Select a SKU; write or scan RFID tags in bulk and add them to inventory.</p></a>
+              <a class="workflow-step" href="/dashboard/inventory"><strong>2. Check inventory</strong><p>View total products and available stock by SKU.</p></a>
+              <a class="workflow-step" href="/dashboard/deliveries"><strong>3. Ship and receive</strong><p>Scan and pack physical products, send them to the hotel, and accept delivery.</p></a>
+            </div>
+          </section>
           <section class="layout">
             <article class="panel"><div class="panel-head"><h2>Asset status</h2><span>Physical vs available</span></div><div class="status-list" id="status-content"><div class="empty">Loading status distribution...</div></div></article>
             <article class="panel" id="chain-panel" hidden><div class="panel-head"><h2>Chain overview</h2><span>Allowed hotels</span></div><div class="chain-card"><small>Chain-wide physical units</small><strong id="chain-units">&mdash;</strong><p id="chain-detail">Loading chain totals...</p></div></article>
@@ -240,8 +356,149 @@
         </div>
 
         <div class="page" data-page="inventory" hidden>
-          <section class="hero"><div><div class="eyebrow">INVENTORY</div><h1>Product inventory</h1><p>SKU, unit and packaging equivalents for the selected hotel.</p></div></section>
+          <section class="hero"><div><div class="eyebrow">INVENTORY</div><h1>Product inventory</h1><p>View registered and available physical products by SKU.</p></div></section>
+          <section class="panel" id="catalog-setup-panel" style="margin-bottom:14px" hidden>
+            <div class="panel-head"><h2>Product catalog setup</h2><span>Manual, CSV or external API</span></div>
+            <form class="user-form" id="catalog-product-form">
+              <div><label for="catalog-sku">SKU</label><input id="catalog-sku" required placeholder="HTL-TOWEL-001"></div>
+              <div class="wide"><label for="catalog-name">Product name</label><input id="catalog-name" required placeholder="White bath towel"></div>
+              <div><label for="catalog-category">Category</label><input id="catalog-category" required placeholder="Towels"></div>
+              <div><label for="catalog-box">Units per box</label><input id="catalog-box" type="number" min="1" step="1" value="1" required></div>
+              <div><label for="catalog-pallet">Boxes per pallet</label><input id="catalog-pallet" type="number" min="1" step="1" value="1" required></div>
+              <div><label for="catalog-size">Size</label><input id="catalog-size" placeholder="70x140 cm"></div>
+              <div><label for="catalog-color">Color</label><input id="catalog-color" placeholder="White"></div>
+              <div class="form-actions"><button class="button" type="submit">Save product</button></div>
+              <div class="form-message" id="catalog-product-message"></div>
+            </form>
+            <form class="user-form" id="catalog-csv-form">
+              <div class="wide"><label for="catalog-csv">Product CSV</label><input id="catalog-csv" type="file" accept=".csv,text/csv" required></div>
+              <div class="form-actions"><button class="button" type="submit">Import products</button></div>
+              <div class="progress-box">Columns: sku, name, category, units_per_box, boxes_per_pallet, size, color</div>
+              <div class="form-message" id="catalog-csv-message"></div>
+            </form>
+            <form class="user-form" id="asset-csv-form">
+              <div class="wide"><label for="asset-csv">EPC to SKU mapping CSV</label><input id="asset-csv" type="file" accept=".csv,text/csv" required></div>
+              <div class="form-actions"><button class="button" type="submit">Register tagged items</button></div>
+              <div class="progress-box">Columns: epc, sku, tid. Each EPC must be unique; grouping remains in the SKU catalog.</div>
+              <div class="form-message" id="asset-csv-message"></div>
+            </form>
+            <div id="catalog-content"><div class="empty">Loading product catalog...</div></div>
+          </section>
           <section class="panel"><div class="panel-head"><h2>Inventory by product</h2><span id="inventory-caption">Current hotel</span></div><div id="inventory-content"><div class="empty">Loading inventory...</div></div></section>
+          <section class="panel" id="zoho-catalog-panel" data-globaltex-only style="margin-top:14px"><div class="panel-head"><h2>Zoho product catalog</h2><span id="zoho-catalog-caption">Loading Zoho products...</span></div><div class="catalog-toolbar"><label>Search products<input id="zoho-catalog-search" type="search" placeholder="Search by SKU or product name" autocomplete="off"></label><label>Product status<select id="zoho-catalog-status"><option value="all">All products</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label><span class="catalog-results" id="zoho-catalog-results">Loading products...</span></div><div id="zoho-catalog-content"><div class="empty">Loading Zoho catalog...</div></div></section>
+        </div>
+
+        <div class="page" data-page="receiving" hidden>
+          <section class="hero"><div><div class="eyebrow">STEP 1 · PRODUCT PREPARATION</div><h1>Link RFID tags to products</h1><p>Select the product, write or scan tags in bulk, review them, and add them to inventory in one operation.</p></div></section>
+          <section class="panel" style="margin-bottom:14px">
+            <div class="panel-head"><h2>Are the tags blank?</h2><span>Skip this step if they already have EPC codes</span></div>
+            <div class="user-form">
+              <div class="wide"><div class="progress-box">If the tags have EPC codes, create a product batch below. If they are blank, open the tag-writing area first.</div></div>
+              <div class="form-actions"><button class="button" id="toggle-encoding-tools" type="button">Open tag writing</button></div>
+            </div>
+          </section>
+          <section class="panel" style="margin-bottom:14px">
+            <div class="panel-head"><h2>1. Select product and target quantity</h2><span>Nothing is added to inventory before approval</span></div>
+            <form class="user-form" id="receiving-batch-form">
+              <div class="wide"><label for="receiving-batch-product">Product</label><select id="receiving-batch-product" required></select></div>
+              <div><label for="receiving-batch-expected">Expected quantity</label><input id="receiving-batch-expected" type="number" min="1" max="100000" value="1000" required></div>
+              <div><label for="receiving-batch-reference">Order / reference</label><input id="receiving-batch-reference" placeholder="PO-2026-001"></div>
+              <div><label for="receiving-batch-facility">Receiving facility</label><select id="receiving-batch-facility" required></select></div>
+              <div><label for="receiving-batch-zone">Receiving zone</label><select id="receiving-batch-zone" required></select></div>
+              <div class="form-actions"><button class="button" type="submit">Create product batch</button></div>
+              <div class="form-message" id="receiving-batch-create-message"></div>
+            </form>
+          </section>
+          <section class="panel" style="margin-bottom:14px">
+            <div class="panel-head"><h2>2. Scan and reconcile</h2><span>Unique EPC count</span></div>
+            <div class="user-form">
+              <div class="wide"><label for="receiving-batch-select">Open batch</label><select id="receiving-batch-select"></select></div>
+              <div class="form-actions"><button class="button" id="receiving-batch-scan" type="button">Scan tags</button></div>
+              <div class="form-actions"><button class="button" id="receiving-batch-approve" type="button" disabled>Approve into inventory</button></div>
+              <div class="progress-box" id="receiving-batch-message">Create or select an open batch.</div>
+            </div>
+            <div class="receiving-stats">
+              <div class="receiving-stat"><span>Expected</span><strong id="receiving-expected">0</strong></div>
+              <div class="receiving-stat"><span>Scanned</span><strong id="receiving-scanned">0</strong></div>
+              <div class="receiving-stat"><span>Remaining</span><strong id="receiving-remaining">0</strong></div>
+              <div class="receiving-stat"><span>Conflicts / overage</span><strong id="receiving-conflicts">0</strong></div>
+            </div>
+            <div class="receiving-meter"><div id="receiving-meter-bar"></div></div>
+            <div id="receiving-batch-tags"><div class="empty">No tags scanned yet.</div></div>
+          </section>
+          <section class="panel"><div class="panel-head"><h2>Batch history</h2><span>Draft and approved receipts</span></div><div id="receiving-batch-history"><div class="empty">No incoming batches yet.</div></div></section>
+        </div>
+
+        <div class="page" data-page="deliveries" hidden>
+          <section class="hero"><div><div class="eyebrow">STEP 3 · SHIPPING & RECEIVING</div><h1>Send products to the hotel</h1><p>Scan the physical products to create the EPC package. The hotel verifies the same package and accepts delivery.</p></div></section>
+          <section class="panel" data-globaltex-only style="margin-bottom:14px">
+            <div class="panel-head"><h2>1. Prepare shipment package</h2><span>Scan physical products in bulk</span></div>
+            <form class="user-form" id="shipment-form">
+              <div><label for="shipment-hotel">Destination hotel</label><select id="shipment-hotel" required></select></div>
+              <div><label for="shipment-facility">Receiving facility</label><select id="shipment-facility" required></select></div>
+              <div><label for="shipment-reference">Order / reference</label><input id="shipment-reference" required placeholder="PO-2026-001"></div>
+              <div class="form-actions"><button class="button" id="shipment-scan" type="button">Scan products in bulk</button></div>
+              <div class="progress-box" id="shipment-package-status">The package is empty. Pass the physical products through the reader.</div>
+              <div class="asset-picker" id="shipment-assets"><div class="empty">No products scanned yet.</div></div>
+              <div class="form-actions"><button class="button danger" id="shipment-clear" type="button" disabled>Paketi temizle</button></div>
+              <div class="form-actions"><button class="button" id="shipment-submit" type="submit" disabled>Send shipment package</button></div>
+              <div class="form-message" id="shipment-message"></div>
+            </form>
+          </section>
+          <section class="panel" style="margin-bottom:14px">
+            <div class="panel-head"><h2>2. Receive at hotel</h2><span>Scan, compare, and approve</span></div>
+            <form class="user-form" id="receiving-form">
+              <div class="wide"><label for="receiving-shipment">Gelen sevkiyat paketi</label><select id="receiving-shipment" required></select></div>
+              <div class="form-actions"><button class="button" id="receiving-start" type="button">Start receiving</button></div>
+              <div class="form-actions"><button class="button" id="receiving-scan" type="button" disabled>Scan products</button><button class="button" id="receiving-accept" type="button" disabled>Accept delivery</button></div>
+              <div class="progress-box" id="receiving-progress">Select an incoming shipment and start receiving.</div>
+              <div class="form-message" id="receiving-message"></div>
+            </form>
+          </section>
+          <section class="panel"><div class="panel-head"><h2>Shipment packages</h2><span id="delivery-caption">Selected operation</span></div><div id="delivery-content"><div class="empty">Loading shipments...</div></div></section>
+        </div>
+
+        <div id="encoding-tools" hidden>
+          <section class="panel mode-safe" style="margin-bottom:14px">
+            <div class="panel-head"><h2>Read existing tag</h2><span>Read only · no changes</span></div>
+            <div class="user-form">
+              <div class="wide"><label>Safe operation</label><div class="progress-box">Place exactly one tag on the reader. This action only displays its current EPC; it never writes, locks or changes the tag.</div></div>
+              <div class="form-actions"><button class="button" id="encoding-read" type="button">Read existing tag</button></div>
+              <div class="progress-box" id="encoding-read-result">No tag has been read yet.</div>
+            </div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Product and packaging settings</h2><span>Used for registration and encoding</span></div>
+            <form class="user-form" id="encoding-form">
+              <div class="wide"><label for="encoding-product">Zoho product</label><select id="encoding-product" required></select></div>
+              <div><label for="encoding-epc">Manual EPC (optional)</label><input id="encoding-epc" class="mono" pattern="[0-9A-Fa-f]{8,96}" autocomplete="off" placeholder="Enter an existing EPC"></div>
+              <div><label for="encoding-box">Units per box</label><input id="encoding-box" type="number" min="1" step="1" value="1" required></div>
+              <div><label for="encoding-pallet">Boxes per pallet</label><input id="encoding-pallet" type="number" min="1" step="1" value="1" required></div>
+              <div><label for="encoding-category">Category</label><input id="encoding-category" value="Zoho Inventory"></div>
+              <div class="form-actions"><button class="button" type="submit">Register entered EPC</button></div>
+              <div class="form-message" id="encoding-message"></div>
+            </form>
+          </section>
+          <section class="panel" style="margin-top:14px">
+            <div class="panel-head"><h2>Production encoding batches</h2><span>Persistent queue · multi-writer safe</span></div>
+            <form class="user-form" id="encoding-batch-form">
+              <div class="wide"><label>Selected product</label><div class="progress-box">The product selected above will be queued for encoding.</div></div>
+              <div><label for="encoding-batch-quantity">Verified units required</label><input id="encoding-batch-quantity" type="number" min="1" max="100000" value="100" required></div>
+              <div class="form-actions"><button class="button" type="submit">Create production batch</button></div>
+              <div class="form-message" id="encoding-batch-message"></div>
+            </form>
+            <div id="encoding-batches-content"><div class="empty">No production batches loaded.</div></div>
+          </section>
+          <section class="panel mode-write" style="margin-top:14px">
+            <div class="panel-head"><h2>Encode new tags</h2><span>Write operation · changes EPC</span></div>
+            <div class="mode-note"><strong>Writing changes the tag.</strong> Confirm the selected product, keep exactly one blank tag on the writer and remove it after every successful result.</div>
+            <form class="user-form" id="batch-form">
+              <div><label for="batch-quantity">Number of items</label><input id="batch-quantity" type="number" min="1" max="5000" value="1" required></div>
+              <div class="wide"><label>Operator instruction</label><div class="progress-box" id="batch-progress">Select the product above, enter quantity and place one blank tag on the writer.</div></div>
+              <div class="form-actions"><button class="button" id="batch-next" type="submit">Write next tag</button></div>
+              <div class="form-message" id="batch-message"></div>
+            </form>
+          </section>
         </div>
 
         <div class="page" data-page="exceptions" hidden>
@@ -260,8 +517,8 @@
         </div>
 
         <div class="page" data-page="activity" hidden>
-          <section class="hero"><div><div class="eyebrow">ACTIVITY</div><h1>Audit and integrations</h1><p>Administrative changes and failed external deliveries.</p></div></section>
-          <section class="layout"><article class="panel"><div class="panel-head"><h2>Recent audit activity</h2><span>Authenticated mutations</span></div><div id="audit-content"><div class="empty">Loading audit events...</div></div></article><article class="panel"><div class="panel-head"><h2>Integration failures</h2><span>Dead-letter queue</span></div><div id="integration-content"><div class="empty">Loading integration events...</div></div></article></section>
+          <section class="hero"><div><div class="eyebrow">RECORDS</div><h1>Activity history</h1><p>Product receiving, RFID read/write, and inventory operations.</p></div></section>
+          <section class="layout"><article class="panel"><div class="panel-head"><h2>Activity history</h2><span>Who did what, and when?</span></div><div id="audit-content"><div class="empty">Loading activity...</div></div></article><article class="panel"><div class="panel-head"><h2>Integration failures</h2><span>Dead-letter queue</span></div><div id="integration-content"><div class="empty">Loading integration events...</div></div></article></section>
         </div>
 
         <div class="page" data-page="users" hidden>
@@ -288,14 +545,98 @@
 
   <script>
     const number = new Intl.NumberFormat("en-US");
-    const date = new Intl.DateTimeFormat("en-GB", {
+    const translations = {
+      es: {
+        "Overview": "Resumen", "1. Product preparation": "1. Preparación de productos", "2. Inventory": "2. Inventario",
+        "3. Shipping & receiving": "3. Envío y recepción", "Activity history": "Historial de actividad",
+        "Technical settings": "Ajustes técnicos", "Reader health": "Estado de lectores", "Movements": "Movimientos",
+        "Users & access": "Usuarios y acceso", "Refresh": "Actualizar", "Sign out": "Cerrar sesión",
+        "What would you like to do?": "¿Qué desea hacer?", "Three core operations": "Tres operaciones principales",
+        "1. Prepare products": "1. Preparar productos", "2. Check inventory": "2. Revisar inventario",
+        "3. Ship and receive": "3. Enviar y recibir", "Product inventory": "Inventario de productos",
+        "Physical units": "Unidades físicas", "Available": "Disponibles", "Open exceptions": "Excepciones abiertas",
+        "Pending moves": "Movimientos pendientes", "Reader issues": "Problemas de lectores", "Active alerts": "Alertas activas",
+        "Asset status": "Estado de activos", "Chain overview": "Resumen de la cadena", "INVENTORY": "INVENTARIO",
+        "STEP 1 · PRODUCT PREPARATION": "PASO 1 · PREPARACIÓN DE PRODUCTOS", "Link RFID tags to products": "Vincular etiquetas RFID a productos",
+        "Are the tags blank?": "¿Las etiquetas están vacías?", "Open tag writing": "Abrir escritura de etiquetas",
+        "Create product batch": "Crear lote de productos", "STEP 3 · SHIPPING & RECEIVING": "PASO 3 · ENVÍO Y RECEPCIÓN",
+        "Send products to the hotel": "Enviar productos al hotel", "Scan products in bulk": "Escanear productos en lote",
+        "Send shipment package": "Enviar paquete", "Start receiving": "Iniciar recepción", "Scan products": "Escanear productos",
+        "Accept delivery": "Aceptar entrega", "Shipment packages": "Paquetes de envío", "RECORDS": "REGISTROS",
+        "Who did what, and when?": "¿Quién hizo qué y cuándo?", "Loading activity...": "Cargando actividad...",
+        "Loading shipments...": "Cargando envíos...", "Selected operation": "Operación seleccionada",
+        "Connecting to operations API": "Conectando con la API de operaciones", "Checking US RFID standard...": "Comprobando el estándar RFID de EE. UU."
+      },
+      tr: {
+        "Overview": "Başlangıç", "1. Product preparation": "1. Ürün hazırlama", "2. Inventory": "2. Envanter",
+        "3. Shipping & receiving": "3. Sevkiyat ve teslim", "Activity history": "İşlem geçmişi",
+        "Technical settings": "Teknik ayarlar", "Reader health": "Okuyucu durumu", "Movements": "Hareketler",
+        "Users & access": "Kullanıcılar ve erişim", "Refresh": "Yenile", "Sign out": "Çıkış yap",
+        "What would you like to do?": "Ne yapmak istiyorsunuz?", "Three core operations": "Üç temel işlem",
+        "1. Prepare products": "1. Ürünleri hazırla", "2. Check inventory": "2. Envanteri kontrol et",
+        "3. Ship and receive": "3. Sevkiyat ve teslim", "Product inventory": "Ürün envanteri",
+        "Physical units": "Fiziksel ürünler", "Available": "Kullanılabilir", "Open exceptions": "Açık istisnalar",
+        "Pending moves": "Bekleyen hareketler", "Reader issues": "Okuyucu sorunları", "Active alerts": "Aktif uyarılar",
+        "Asset status": "Ürün durumu", "Chain overview": "Zincir özeti", "INVENTORY": "ENVANTER",
+        "STEP 1 · PRODUCT PREPARATION": "ADIM 1 · ÜRÜN HAZIRLAMA", "Link RFID tags to products": "RFID çiplerini ürüne bağla",
+        "Are the tags blank?": "Çipler boş mu?", "Open tag writing": "Çip yazma alanını aç",
+        "Create product batch": "Ürün partisini oluştur", "STEP 3 · SHIPPING & RECEIVING": "ADIM 3 · SEVKİYAT VE TESLİM",
+        "Send products to the hotel": "Ürünleri otele gönder", "Scan products in bulk": "Ürünleri toplu okut",
+        "Send shipment package": "Sevkiyat paketini gönder", "Start receiving": "Teslim almayı başlat", "Scan products": "Ürünleri okut",
+        "Accept delivery": "Teslimatı onayla", "Shipment packages": "Sevkiyat paketleri", "RECORDS": "KAYITLAR",
+        "Who did what, and when?": "Kim, ne zaman, ne yaptı?", "Loading activity...": "İşlemler yükleniyor...",
+        "Loading shipments...": "Sevkiyatlar yükleniyor...", "Selected operation": "Seçili işletme",
+        "Connecting to operations API": "Operasyon API'sine bağlanıyor", "Checking US RFID standard...": "ABD RFID standardı kontrol ediliyor..."
+      }
+    };
+    let currentLanguage = localStorage.getItem("dashboard-language") || "en";
+    if (!translations[currentLanguage] && currentLanguage !== "en") currentLanguage = "en";
+    const sourceText = new WeakMap();
+    const renderedText = new WeakMap();
+    function translateTextNode(node) {
+      if (!node.nodeValue?.trim() || node.parentElement?.closest("script,style,option")) return;
+      if (!sourceText.has(node) || (renderedText.has(node) && node.nodeValue !== renderedText.get(node))) {
+        sourceText.set(node, node.nodeValue);
+      }
+      const original = sourceText.get(node);
+      const key = original.trim();
+      const translated = currentLanguage === "en" ? key : (translations[currentLanguage]?.[key] || key);
+      const nextValue = original.replace(key, translated);
+      renderedText.set(node, nextValue);
+      if (node.nodeValue !== nextValue) node.nodeValue = nextValue;
+    }
+    function applyLanguage() {
+      document.documentElement.lang = currentLanguage;
+      document.querySelector("#language-select").value = currentLanguage;
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) translateTextNode(walker.currentNode);
+    }
+    const languageObserver = new MutationObserver(records => records.forEach(record => {
+      if (record.type === "characterData") translateTextNode(record.target);
+      record.addedNodes.forEach(node => {
+        if (node.nodeType === Node.TEXT_NODE) translateTextNode(node);
+        else if (node.nodeType === Node.ELEMENT_NODE) {
+          const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+          while (walker.nextNode()) translateTextNode(walker.currentNode);
+        }
+      });
+    }));
+    document.querySelector("#language-select").addEventListener("change", event => {
+      currentLanguage = event.target.value;
+      localStorage.setItem("dashboard-language", currentLanguage);
+      applyLanguage();
+    });
+    applyLanguage();
+    languageObserver.observe(document.body, { subtree: true, childList: true, characterData: true });
+
+    const date = new Intl.DateTimeFormat(currentLanguage === "tr" ? "tr-TR" : currentLanguage === "es" ? "es-ES" : "en-GB", {
       day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"
     });
     const ids = [
       "inventory-content", "status-content", "exception-content", "alert-content",
-      "health-content", "movement-content", "audit-content", "integration-content"
+      "health-content", "movement-content", "delivery-content", "audit-content", "integration-content"
     ];
-    const routes = new Set(["overview", "inventory", "exceptions", "devices", "movements", "activity", "users"]);
+    const routes = new Set(["overview", "inventory", "receiving", "deliveries", "exceptions", "devices", "movements", "activity", "users"]);
 
     function routeFromPath() {
       const segment = location.pathname.replace(/^\/dashboard\/?/, "").split("/")[0];
@@ -307,12 +648,21 @@
           !["hotel_admin", "chain_admin"].includes(currentIdentity.role)) {
         resolved = "overview";
       }
+      if (["receiving", "activity"].includes(resolved) &&
+          (currentIdentity?.role !== "chain_admin" ||
+           currentIdentity.tenantId !== currentIdentity.tenantIds[0])) {
+        resolved = "overview";
+      }
       document.querySelectorAll("[data-page]").forEach(page => {
         page.hidden = page.dataset.page !== resolved;
       });
       document.querySelectorAll("[data-route]").forEach(link => {
         link.classList.toggle("active", link.dataset.route === resolved);
+        if (link.dataset.route === resolved && link.closest("details")) {
+          link.closest("details").open = true;
+        }
       });
+      if (resolved !== "receiving") document.querySelector("#encoding-tools").hidden = true;
       if (push) {
         const path = resolved === "overview" ? "/dashboard" : `/dashboard/${resolved}`;
         history.pushState({ route: resolved }, "", `${path}${location.search}`);
@@ -336,8 +686,8 @@
       const className = String(value || "").toLowerCase().replace(/[^a-z_]/g, "");
       return `<span class="badge ${className}">${safe}</span>`;
     }
-    function table(headers, rows) {
-      return `<div class="table-wrap"><table><thead><tr>${headers.map(item => `<th>${escapeHtml(item)}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
+    function table(headers, rows, className = "") {
+      return `<div class="table-wrap ${escapeHtml(className)}"><table><thead><tr>${headers.map(item => `<th>${escapeHtml(item)}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
     }
     function tenantOptions(tenantId) {
       return { headers: { "x-tenant-id": tenantId } };
@@ -373,6 +723,17 @@
         select.hidden = true;
       }
     }
+    function configureRoleView(identity) {
+      const globaltex = identity.role === "chain_admin" && identity.tenantId === identity.tenantIds[0];
+      document.querySelectorAll("[data-globaltex-only]").forEach(element => {
+        element.hidden = !globaltex;
+      });
+      document.querySelector("#overview-eyebrow").textContent = globaltex ? "GLOBALTEX OPERATIONS" : "HOTEL INVENTORY";
+      document.querySelector("#overview-title").textContent = globaltex ? "Wholesale textile control" : "Your textile inventory";
+      document.querySelector("#overview-description").textContent = globaltex
+        ? "Manage tagged products, hotel deliveries and operational exceptions."
+        : "See what is available, in laundry, damaged or missing at your property.";
+    }
     function renderStatus(data) {
       const entries = Object.entries(data.statusCounts || {});
       const max = Math.max(data.uniqueUnits || 0, 1);
@@ -390,12 +751,176 @@
         return;
       }
       const rows = data.lines.map(line => `<tr>
-        <td class="mono">${escapeHtml(line.sku)}</td><td>${escapeHtml(line.name)}</td>
-        <td><strong>${number.format(line.units)}</strong></td><td>${number.format(line.fullPallets)}</td>
-        <td>${number.format(line.fullBoxes)}</td><td>${number.format(line.looseUnits)}</td>
+        <td class="mono" data-label="SKU">${escapeHtml(line.sku)}</td><td data-label="Product">${escapeHtml(line.name)}</td>
+        <td data-label="Units"><strong>${number.format(line.units)}</strong></td><td data-label="Pallets">${number.format(line.fullPallets)}</td>
+        <td data-label="Boxes">${number.format(line.fullBoxes)}</td><td data-label="Loose">${number.format(line.looseUnits)}</td>
       </tr>`);
       document.querySelector("#inventory-content").innerHTML =
-        table(["SKU", "Product", "Units", "Pallets", "Boxes", "Loose"], rows);
+        table(["SKU", "Product", "Units", "Pallets", "Boxes", "Loose"], rows, "inventory-responsive inventory-table");
+    }
+    function renderCatalog(products) {
+      currentCatalogProducts = products || [];
+      refreshEncodingProducts();
+      const content = document.querySelector("#catalog-content");
+      if (!currentCatalogProducts.length) {
+        content.innerHTML = '<div class="empty">No products yet. Add one manually or import the product CSV.</div>';
+        return;
+      }
+      const rows = currentCatalogProducts.map(product => `<tr>
+        <td class="mono">${escapeHtml(product.sku)}</td><td>${escapeHtml(product.name)}</td>
+        <td>${escapeHtml(product.category)}</td><td>${number.format(product.unitsPerBox)}</td>
+        <td>${number.format(product.boxesPerPallet)}</td><td>${escapeHtml(product.size || "—")}</td>
+        <td>${escapeHtml(product.color || "—")}</td>
+      </tr>`);
+      content.innerHTML = table(["SKU", "Product", "Category", "Units / box", "Boxes / pallet", "Size", "Color"], rows);
+    }
+    function renderZohoCatalog(data, rfidSummary) {
+      const caption = document.querySelector("#zoho-catalog-caption");
+      const content = document.querySelector("#zoho-catalog-content");
+      if (!data.connected) {
+        caption.textContent = "Report not generated";
+        content.innerHTML = '<div class="empty">Run npm run zoho:mapping-report to refresh the Zoho catalog.</div>';
+        return;
+      }
+      caption.textContent = `${number.format(data.products.length)} RFID-eligible products Â· read only`;
+      if (!data.products.length) {
+        content.innerHTML = '<div class="empty">No RFID-eligible Zoho products were found.</div>';
+        return;
+      }
+      zohoCatalogData = data;
+      zohoCatalogRfidSummary = rfidSummary;
+      const inactiveCount = data.products.filter(product => product.status === "inactive").length;
+      caption.textContent = `${number.format(data.products.length)} products · ${number.format(inactiveCount)} inactive · read only`;
+      zohoProducts = data.products.filter(product => product.status !== "inactive" && product.eligible !== false);
+      document.querySelector("#encoding-product").innerHTML = zohoProducts.map(product =>
+        `<option value="${escapeHtml(product.sku)}">${escapeHtml(product.sku)} Â· ${escapeHtml(product.name)}</option>`
+      ).join("");
+      refreshEncodingProducts();
+      const rfidBySku = new Map((rfidSummary.lines || []).map(line => [String(line.sku).toUpperCase(), line.units]));
+      const query = document.querySelector("#zoho-catalog-search").value.trim().toLocaleLowerCase();
+      const status = document.querySelector("#zoho-catalog-status").value;
+      const filteredProducts = data.products.filter(product => {
+        const productStatus = product.status === "inactive" ? "inactive" : "active";
+        const haystack = `${product.sku || ""} ${product.name || ""}`.toLocaleLowerCase();
+        return (status === "all" || productStatus === status) && (!query || haystack.includes(query));
+      });
+      document.querySelector("#zoho-catalog-results").textContent =
+        `${number.format(filteredProducts.length)} of ${number.format(data.products.length)} products`;
+      if (!filteredProducts.length) {
+        content.innerHTML = '<div class="empty">No products match this search and status filter.</div>';
+        return;
+      }
+      const rows = filteredProducts.map(product => {
+        const rfidUnits = rfidBySku.get(String(product.sku).toUpperCase()) || 0;
+        const difference = rfidUnits - product.zohoStockOnHand;
+        return `<tr>
+        <td class="mono" data-label="SKU">${escapeHtml(product.sku)}</td>
+        <td data-label="Product">${escapeHtml(product.name)} ${badge(product.status === "inactive" ? "inactive" : "active")}</td>
+        <td data-label="Zoho on hand"><strong>${number.format(product.zohoStockOnHand)}</strong></td>
+        <td data-label="Zoho available">${number.format(product.zohoAvailableStock)}</td>
+        <td data-label="RFID seen"><strong>${number.format(rfidUnits)}</strong></td>
+        <td data-label="Difference">${number.format(difference)}</td>
+      </tr>`;
+      });
+      content.innerHTML = table(["SKU", "Product", "Zoho on hand", "Zoho available", "RFID seen", "Difference"], rows, "inventory-responsive zoho-table");
+    }
+    function refreshEncodingProducts() {
+      const bySku = new Map();
+      for (const product of [...currentCatalogProducts, ...zohoProducts]) {
+        if (product?.sku) bySku.set(String(product.sku).toUpperCase(), product);
+      }
+      document.querySelector("#encoding-product").innerHTML = [...bySku.values()].map(product =>
+        `<option value="${escapeHtml(product.sku)}">${escapeHtml(product.sku)} · ${escapeHtml(product.name)}</option>`
+      ).join("");
+    }
+    function renderEncodingBatches(items = []) {
+      const content = document.querySelector("#encoding-batches-content");
+      if (!items.length) {
+        content.innerHTML = '<div class="empty">No production encoding batch has been created yet.</div>';
+        return;
+      }
+      const rows = items.map(item => `<tr>
+        <td class="mono">${escapeHtml(item.batchId)}</td><td class="mono">${escapeHtml(item.sku)}</td>
+        <td>${badge(item.status)}</td><td>${number.format(item.verified)} / ${number.format(item.requestedQuantity)}</td>
+        <td>${number.format(item.failed)}</td><td>${formatDate(item.createdAt)}</td>
+      </tr>`);
+      content.innerHTML = table(["Batch", "SKU", "Status", "Verified", "Failed attempts", "Created"], rows);
+    }
+    function receivingProductOptions() {
+      const products = currentCatalogProducts.filter(product => product.active !== false);
+      return products.map(product =>
+        `<option value="${escapeHtml(product.sku)}">${escapeHtml(product.sku)} Â· ${escapeHtml(product.name)}</option>`
+      ).join("") || '<option value="">Add a product to the catalog first</option>';
+    }
+    function refreshReceivingZones() {
+      const facilityId = document.querySelector("#receiving-batch-facility").value;
+      const zones = currentZones.filter(zone => zone.facilityId === facilityId && zone.active !== false);
+      document.querySelector("#receiving-batch-zone").innerHTML = zones.map(zone =>
+        `<option value="${escapeHtml(zone.zoneId)}">${escapeHtml(zone.name)}</option>`
+      ).join("") || '<option value="">No active receiving zone</option>';
+    }
+    function renderReceivingBatch(batch) {
+      const expected = batch?.expectedQuantity ?? 0;
+      const scanned = batch?.scannedQuantity ?? 0;
+      const problems = (batch?.conflictEpcs?.length ?? 0) + (batch?.overageQuantity ?? 0);
+      document.querySelector("#receiving-expected").textContent = number.format(expected);
+      document.querySelector("#receiving-scanned").textContent = number.format(scanned);
+      document.querySelector("#receiving-remaining").textContent = number.format(batch?.remainingQuantity ?? 0);
+      document.querySelector("#receiving-conflicts").textContent = number.format(problems);
+      document.querySelector("#receiving-meter-bar").style.width =
+        `${expected ? Math.min(scanned / expected * 100, 100) : 0}%`;
+      const scan = document.querySelector("#receiving-batch-scan");
+      const approve = document.querySelector("#receiving-batch-approve");
+      scan.disabled = !batch || batch.status !== "draft";
+      approve.disabled = !batch?.canApprove;
+      const message = document.querySelector("#receiving-batch-message");
+      if (!batch) message.textContent = "Create or select an open batch.";
+      else if (batch.status === "approved") message.textContent =
+        `Approved by ${batch.approvedBy || "operator"}. ${number.format(scanned)} units are now in inventory.`;
+      else if (batch.conflictEpcs.length) message.textContent =
+        `${batch.conflictEpcs.length} EPC conflicts with existing inventory. Resolve before approval.`;
+      else if (batch.overageQuantity) message.textContent =
+        `${batch.overageQuantity} extra tag detected. Approval is blocked.`;
+      else if (batch.remainingQuantity) message.textContent =
+        `${number.format(batch.remainingQuantity)} more unique tags required before approval.`;
+      else message.textContent = "Batch reconciled. Review and approve it into inventory.";
+      const tags = batch?.tags ?? [];
+      document.querySelector("#receiving-batch-tags").innerHTML = tags.length
+        ? table(["EPC", "Reads", "Last seen", "Action"], tags.slice(-100).map(tag => `<tr>
+            <td class="mono" data-label="EPC">${escapeHtml(tag.epc)}</td>
+            <td data-label="Reads">${number.format(tag.readCount)}</td>
+            <td data-label="Last seen">${formatDate(tag.lastSeenAt)}</td>
+            <td data-label="Action">${batch.status === "draft" ? `<button class="mini-button" type="button" data-remove-receiving-epc="${escapeHtml(tag.epc)}">Remove</button>` : "â€”"}</td>
+          </tr>`), "inventory-responsive")
+        : '<div class="empty">No tags scanned yet.</div>';
+    }
+    function renderReceivingBatches(batches) {
+      const selectedBefore = document.querySelector("#receiving-batch-select").value;
+      currentReceivingBatches = batches || [];
+      document.querySelector("#receiving-batch-product").innerHTML = receivingProductOptions();
+      document.querySelector("#receiving-batch-facility").innerHTML = currentFacilities
+        .filter(facility => facility.active !== false)
+        .map(facility => `<option value="${escapeHtml(facility.facilityId)}">${escapeHtml(facility.name)}</option>`)
+        .join("") || '<option value="">No active facility</option>';
+      refreshReceivingZones();
+      const select = document.querySelector("#receiving-batch-select");
+      select.innerHTML = currentReceivingBatches.map(batch => {
+        const product = currentCatalogProducts.find(item => item.sku === batch.sku);
+        return `<option value="${escapeHtml(batch.batchId)}">${escapeHtml(batch.reference || batch.batchId.slice(0, 8))} Â· ${escapeHtml(product?.name || batch.sku)} Â· ${escapeHtml(batch.status)}</option>`;
+      }).join("") || '<option value="">No batches yet</option>';
+      const preferred = currentReceivingBatches.find(batch => batch.batchId === selectedBefore) ||
+        currentReceivingBatches.find(batch => batch.status === "draft") || currentReceivingBatches[0];
+      if (preferred) select.value = preferred.batchId;
+      renderReceivingBatch(preferred ?? null);
+      const historyRows = currentReceivingBatches.map(batch => {
+        const product = currentCatalogProducts.find(item => item.sku === batch.sku);
+        return `<tr><td data-label="Reference">${escapeHtml(batch.reference || "â€”")}</td><td data-label="Product">${escapeHtml(product?.name || batch.sku)}</td>` +
+          `<td data-label="Expected">${number.format(batch.expectedQuantity)}</td><td data-label="Scanned">${number.format(batch.scannedQuantity)}</td>` +
+          `<td data-label="Status">${badge(batch.status)}</td><td data-label="Created">${formatDate(batch.createdAt)}</td></tr>`;
+      });
+      document.querySelector("#receiving-batch-history").innerHTML = historyRows.length
+        ? table(["Reference", "Product", "Expected", "Scanned", "Status", "Created"], historyRows, "inventory-responsive")
+        : '<div class="empty">No incoming batches yet.</div>';
     }
     function renderExceptions(items) {
       if (!items.length) {
@@ -455,18 +980,184 @@
       document.querySelector("#movement-content").innerHTML =
         table(["EPC", "Current", "Candidate", "Reads", "Reason", "Observed"], rows);
     }
+    function renderDeliveries(items, tenantId) {
+      document.querySelector("#delivery-caption").textContent = `${tenantId} Â· ${number.format(items.length)} deliveries`;
+      if (!items.length) {
+        document.querySelector("#delivery-content").innerHTML =
+          '<div class="empty">No RFID-tagged deliveries have been assigned to this hotel yet.</div>';
+        return;
+      }
+      const rows = items.map(item => `<tr>
+        <td>${escapeHtml(item.reference || item.shipmentId)}</td>
+        <td>${item.supplierTenantId === tenantId ? "Outgoing" : "Incoming"}</td>
+        <td>${escapeHtml(item.destinationFacilityId)}</td>
+        <td><strong>${number.format(item.assetCount)}</strong></td>
+        <td>${number.format(item.acceptedAssetCount)}</td>
+        <td>${badge(item.status)}</td><td>${formatDate(item.createdAt)}</td>
+      </tr>`);
+      document.querySelector("#delivery-content").innerHTML =
+        table(["Reference", "Direction", "Destination", "Tagged units", "Received", "Status", "Created"], rows);
+    }
+    async function loadDestinationFacilities() {
+      const hotel = document.querySelector("#shipment-hotel").value;
+      const select = document.querySelector("#shipment-facility");
+      if (!hotel) {
+        select.innerHTML = '<option value="">Select hotel first</option>';
+        return;
+      }
+      const data = await request("/v1/admin/facilities", tenantOptions(hotel));
+      select.innerHTML = data.facilities.map(facility =>
+        `<option value="${escapeHtml(facility.facilityId)}">${escapeHtml(facility.name)}</option>`
+      ).join("") || '<option value="">No receiving facility configured</option>';
+    }
+    function renderOutgoingPackage() {
+      const assetsByEpc = new Map(currentAssets.map(asset => [asset.epc, asset]));
+      const groups = new Map();
+      for (const epc of outgoingPackageEpcs) {
+        const asset = assetsByEpc.get(epc);
+        if (!asset) continue;
+        const sku = asset.sku || "Unregistered";
+        if (!groups.has(sku)) groups.set(sku, {
+          sku,
+          name: currentProductNames.get(sku) || sku,
+          quantity: 0
+        });
+        groups.get(sku).quantity += 1;
+      }
+      const rows = [...groups.values()].map(group => `<tr>
+        <td><strong>${escapeHtml(group.name)}</strong></td>
+        <td class="mono">${escapeHtml(group.sku)}</td>
+        <td><strong>${number.format(group.quantity)}</strong></td>
+      </tr>`);
+      document.querySelector("#shipment-assets").innerHTML = rows.length
+        ? table(["Ürün", "SKU", "Okutulan adet"], rows)
+        : '<div class="empty">Henüz ürün okutulmamış.</div>';
+      document.querySelector("#shipment-package-status").textContent = outgoingPackageEpcs.size
+        ? `Pakette ${number.format(outgoingPackageEpcs.size)} fiziksel ürün var · ${number.format(groups.size)} farklı SKU.`
+        : "Paket boş. Göndereceğiniz fiziksel ürünleri okuyucudan geçirin.";
+      document.querySelector("#shipment-clear").disabled = !outgoingPackageEpcs.size;
+      document.querySelector("#shipment-submit").disabled = !outgoingPackageEpcs.size;
+    }
+    function configureDeliveryWorkflows(identity, shipments, assets, summary) {
+      currentShipments = shipments;
+      currentAssets = assets;
+      const hotelSelect = document.querySelector("#shipment-hotel");
+      const destinations = identity.tenantIds.filter(tenant => tenant !== identity.tenantId);
+      hotelSelect.innerHTML = destinations.map(tenant =>
+        `<option value="${escapeHtml(tenant)}">${escapeHtml(tenant)}</option>`
+      ).join("") || '<option value="">No customer hotel configured</option>';
+      hotelSelect.onchange = () => loadDestinationFacilities().catch(showError);
+      if (identity.role === "chain_admin") loadDestinationFacilities().catch(showError);
+
+      currentProductNames = new Map((summary.lines || []).map(line => [line.sku, line.name]));
+      renderOutgoingPackage();
+
+      const incoming = shipments.filter(item =>
+        item.customerTenantId === identity.tenantId && item.status !== "received"
+      );
+      document.querySelector("#receiving-shipment").innerHTML = incoming.map(item =>
+        `<option value="${escapeHtml(item.shipmentId)}">${escapeHtml(item.reference || item.shipmentId)} · ${number.format(item.assetCount)} tagged units</option>`
+      ).join("") || '<option value="">No delivery waiting for acceptance</option>';
+      if (!incoming.length) {
+        document.querySelector("#receiving-start").disabled = true;
+        document.querySelector("#receiving-progress").textContent = "No incoming shipment is waiting for acceptance.";
+      } else {
+        document.querySelector("#receiving-start").disabled = false;
+      }
+    }
+    function auditDescription(item) {
+      if (item.summary) return item.summary;
+      const action = String(item.action || "");
+      if (action === "receiving_batch.approved") {
+        const quantity = Number(item.details?.quantity || 0);
+        return quantity
+          ? `${number.format(quantity)} ürünlük parti onaylandı ve envantere eklendi`
+          : "Ürün partisi onaylandı ve envantere eklendi";
+      }
+      if (action === "shipment.shipping") {
+        const quantity = Number(item.details?.quantity || 0);
+        return `${quantity ? `${number.format(quantity)} ürünlük ` : ""}sevkiyat paketi otele gönderildi`;
+      }
+      if (action === "shipment.receiving") {
+        const quantity = Number(item.details?.quantity || 0);
+        return `${quantity ? `${number.format(quantity)} ürünlük ` : ""}otel teslimatı doğrulandı ve kabul edildi`;
+      }
+      const rules = [
+        [/^POST \/v1\/admin\/receiving-batches\/[^/]+\/scan$/, "Ürün partisi için RFID etiketleri okundu"],
+        [/^POST \/v1\/admin\/receiving-batches\/[^/]+\/approve$/, "Ürün partisi envantere alma onayı verildi"],
+        [/^DELETE \/v1\/admin\/receiving-batches\/[^/]+\/tags\//, "Hatalı etiket ürün partisinden çıkarıldı"],
+        [/^POST \/v1\/admin\/receiving-batches$/, "Yeni ürün kabul partisi oluşturuldu"],
+        [/^POST \/v1\/admin\/hardware\/rru9809\/scan$/, "RFID etiketi okundu"],
+        [/^POST \/v1\/admin\/hardware\/rru9809\/write$/, "RFID etiketine yeni EPC kodu yazıldı"],
+        [/^POST \/v1\/admin\/zoho\/assets\/register$/, "Okunan EPC seçili ürüne bağlandı"],
+        [/^POST \/v1\/admin\/assets\/register$/, "Ürün etiketleri envantere kaydedildi"],
+        [/^POST \/v1\/admin\/encoding\/batches$/, "Yeni etiket yazma partisi oluşturuldu"],
+        [/^POST \/v1\/admin\/shipments\/[^/]+\/accept$/, "Otel teslimatı kabul edildi ve stok devredildi"],
+        [/^POST \/v1\/admin\/shipments$/, "Otele gönderim kaydı oluşturuldu"],
+        [/^POST \/v1\/admin\/sessions\/[^/]+\/complete$/, "RFID sayım oturumu tamamlandı"],
+        [/^POST \/v1\/admin\/sessions$/, "RFID sayım oturumu başlatıldı"],
+        [/^POST \/v1\/admin\/assets\/[^/]+\/status$/, "Ürün durumu değiştirildi"],
+        [/^POST \/v1\/admin\/exceptions\/[^/]+\/resolve$/, "İstisna kaydı çözüldü"],
+        [/^POST \/v1\/admin\/alerts\/[^/]+\/acknowledge$/, "Uyarı görüldü olarak işaretlendi"],
+        [/^POST \/v1\/admin\/catalog\/import$/, "Ürün kataloğu içe aktarıldı"],
+        [/^POST \/v1\/admin\/users$/, "Yeni kullanıcı oluşturuldu"],
+        [/^POST \/v1\/admin\/facilities$/, "Yeni tesis kaydedildi"],
+        [/^POST \/v1\/admin\/zones$/, "Yeni stok alanı kaydedildi"],
+        [/^POST \/v1\/admin\/readers$/, "RFID okuyucu kaydedildi"]
+      ];
+      const match = rules.find(([pattern]) => pattern.test(action));
+      return match ? match[1] : action.replace(/^POST /, "İşlem: ").replace(/^DELETE /, "Silme işlemi: ");
+    }
+    function groupAuditItems(items) {
+      const grouped = new Map();
+      const semanticApprovals = new Set(items
+        .filter(item => item.action === "receiving_batch.approved")
+        .map(item => item.entityId));
+      for (const item of items) {
+        const action = String(item.action || "");
+        const scan = action.match(/^POST \/v1\/admin\/receiving-batches\/([^/]+)\/scan$/);
+        const approval = action.match(/^POST \/v1\/admin\/receiving-batches\/([^/]+)\/approve$/);
+        if (approval && semanticApprovals.has(decodeURIComponent(approval[1]))) continue;
+        let key = item.auditId;
+        let kind = "single";
+        if (scan) {
+          key = `batch-scan:${scan[1]}`;
+          kind = "batch-scan";
+        } else if (/^POST \/v1\/admin\/(hardware\/rru9809\/write|zoho\/assets\/register)$/.test(action)) {
+          key = `tag-write:${item.actorId}:${String(item.createdAt).slice(0, 10)}`;
+          kind = "tag-write";
+        } else if (action === "POST /v1/admin/hardware/rru9809/scan") {
+          key = `tag-read:${item.actorId}:${String(item.createdAt).slice(0, 10)}`;
+          kind = "tag-read";
+        }
+        if (!grouped.has(key)) grouped.set(key, { ...item, kind, count: 0, writes: 0, registrations: 0 });
+        const group = grouped.get(key);
+        group.count += 1;
+        if (action.endsWith("/write")) group.writes += 1;
+        if (action.endsWith("/register")) group.registrations += 1;
+      }
+      return [...grouped.values()].map(item => {
+        if (item.kind === "batch-scan") item.summary = `Ürün partisi toplu olarak tarandı (${number.format(item.count)} tarama)`;
+        if (item.kind === "tag-write") {
+          const quantity = Math.max(item.writes, item.registrations);
+          item.summary = `${number.format(quantity)} RFID etiketi yazıldı ve ürüne bağlandı`;
+        }
+        if (item.kind === "tag-read") item.summary = `RFID okuma yapıldı (${number.format(item.count)} işlem)`;
+        return item;
+      }).slice(0, 30);
+    }
     function renderAudit(items) {
       if (!items.length) {
         document.querySelector("#audit-content").innerHTML =
           '<div class="empty">No administrative changes have been recorded yet.</div>';
         return;
       }
-      const rows = items.map(item => `<tr>
+      const rows = groupAuditItems(items).map(item => `<tr>
         <td>${formatDate(item.createdAt)}</td><td>${escapeHtml(item.actorId)}</td>
-        <td>${badge(item.actorRole)}</td><td>${escapeHtml(item.action)}</td>
+        <td>${badge(item.actorRole)}</td><td title="${escapeHtml(item.action)}"><strong>${escapeHtml(auditDescription(item))}</strong></td>
       </tr>`);
       document.querySelector("#audit-content").innerHTML =
-        table(["Time", "Actor", "Role", "Action"], rows);
+        table(["Tarih", "Kullanıcı", "Yetki", "Yapılan işlem"], rows);
     }
     function renderIntegrations(items) {
       if (!items.length) {
@@ -483,6 +1174,20 @@
     }
 
     let currentIdentity = null;
+    let zohoProducts = [];
+    let zohoCatalogData = null;
+    let zohoCatalogRfidSummary = null;
+    let currentCatalogProducts = [];
+    let currentAssets = [];
+    let currentProductNames = new Map();
+    let outgoingPackageEpcs = new Set();
+    let currentShipments = [];
+    let currentFacilities = [];
+    let currentZones = [];
+    let currentReceivingBatches = [];
+    let activeReceivingSession = null;
+    let batchTarget = 0;
+    let batchCompleted = 0;
     let managedUsers = [];
     let editingUserId = null;
 
@@ -590,6 +1295,9 @@
       const identity = await request("/v1/admin/me", initialOptions);
       currentIdentity = identity;
       setTenant(identity);
+      configureRoleView(identity);
+      document.querySelector("#catalog-setup-panel").hidden =
+        !["hotel_admin", "chain_admin"].includes(identity.role);
       configureUserManagement(identity);
       showRoute(routeFromPath());
       const options = tenantOptions(identity.tenantId);
@@ -597,16 +1305,27 @@
         request("/v1/admin/summary", options),
         request("/v1/admin/pending-movements", options),
         request("/v1/admin/readers/health", options),
-        request("/v1/admin/audit?limit=12", options),
+        request("/v1/admin/audit?limit=200", options),
         request("/v1/admin/integrations/outbox?status=dead_letter&limit=12", options),
         request("/v1/admin/alerts?limit=30", options),
         request("/v1/admin/exceptions?status=open&limit=30", options)
+        ,request("/v1/admin/shipments", options)
+        ,request("/v1/admin/zoho/catalog", options)
+        ,request("/v1/admin/assets", options)
+        ,request("/v1/admin/facilities", options)
+        ,request("/v1/admin/zones", options)
+        ,request("/v1/admin/catalog", options)
+        ,request("/v1/admin/receiving-batches", options)
+        ,request("/v1/admin/encoding/batches", options)
+        ,request("/v1/admin/standards/profile", options)
       ];
       if (identity.role === "chain_admin") {
         requests.push(request("/v1/admin/chain/summary", options));
       }
-      const [summary, movements, health, audit, integrations, alerts, exceptions, chain] =
+      const [summary, movements, health, audit, integrations, alerts, exceptions, shipments, zohoCatalog, assets, facilities, zones, catalog, receivingBatches, encodingBatches, standards, chain] =
         await Promise.all(requests);
+      currentFacilities = facilities.facilities;
+      currentZones = zones.zones;
       const activeAlerts = alerts.alerts.filter(item => item.status !== "resolved");
       document.querySelector("#units").textContent = number.format(summary.uniqueUnits);
       document.querySelector("#available").textContent = number.format(summary.availableUnits);
@@ -615,14 +1334,23 @@
       document.querySelector("#reader-issues").textContent =
         number.format(health.readers.filter(item => item.status !== "online").length);
       document.querySelector("#active-alerts").textContent = number.format(activeAlerts.length);
+      document.querySelector("#standards-note").textContent = standards.companyPrefixConfigured
+        ? `ABD standardı aktif · ${standards.airInterface} · ${standards.itemScheme} · ${standards.eventStandard}`
+        : `ABD standardına hazır çalışma modu · ${standards.airInterface} · GS1 firma öneki girilene kadar mevcut EPC'ler korunur`;
       document.querySelector("#inventory-caption").textContent =
         `${identity.tenantId} · ${number.format(summary.registeredUnits)} registered`;
       renderInventory(summary);
+      renderCatalog(catalog.products);
+      renderReceivingBatches(receivingBatches.batches);
+      renderZohoCatalog(zohoCatalog, summary);
+      renderEncodingBatches(encodingBatches.batches);
       renderStatus(summary);
       renderExceptions(exceptions.exceptions);
       renderAlerts(activeAlerts);
       renderHealth(health.readers);
       renderMovements(movements.pendingMovements);
+      renderDeliveries(shipments.shipments, identity.tenantId);
+      configureDeliveryWorkflows(identity, shipments.shipments, assets.assets, summary);
       renderAudit(audit.events);
       renderIntegrations(integrations.events);
       if (chain) {
@@ -645,6 +1373,106 @@
       document.querySelector("#sync-state").textContent = "Dashboard refresh failed";
     }
     document.querySelector("#refresh").addEventListener("click", () => load().catch(showError));
+    document.querySelector("#toggle-encoding-tools").addEventListener("click", event => {
+      const tools = document.querySelector("#encoding-tools");
+      tools.hidden = !tools.hidden;
+      event.currentTarget.textContent = tools.hidden ? "Open tag writing" : "Hide tag writing";
+      if (!tools.hidden) tools.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    document.querySelector("#receiving-batch-facility").addEventListener("change", refreshReceivingZones);
+    document.querySelector("#receiving-batch-select").addEventListener("change", event => {
+      renderReceivingBatch(currentReceivingBatches.find(batch => batch.batchId === event.target.value) ?? null);
+    });
+    document.querySelector("#receiving-batch-form").addEventListener("submit", async event => {
+      event.preventDefault();
+      const message = document.querySelector("#receiving-batch-create-message");
+      message.textContent = "Creating incoming batch...";
+      try {
+        const batch = await request("/v1/admin/receiving-batches", {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-tenant-id": currentIdentity.tenantId },
+          body: JSON.stringify({
+            sku: document.querySelector("#receiving-batch-product").value,
+            expectedQuantity: Number(document.querySelector("#receiving-batch-expected").value),
+            facilityId: document.querySelector("#receiving-batch-facility").value,
+            zoneId: document.querySelector("#receiving-batch-zone").value,
+            reference: document.querySelector("#receiving-batch-reference").value.trim()
+          })
+        });
+        currentReceivingBatches.unshift(batch);
+        renderReceivingBatches(currentReceivingBatches);
+        document.querySelector("#receiving-batch-select").value = batch.batchId;
+        renderReceivingBatch(batch);
+        message.className = "form-message success";
+        message.textContent = "Batch created. Start scanning tags; inventory is unchanged until approval.";
+      } catch (error) {
+        message.className = "form-message";
+        message.textContent = error.message;
+      }
+    });
+    document.querySelector("#receiving-batch-scan").addEventListener("click", async () => {
+      const batchId = document.querySelector("#receiving-batch-select").value;
+      const message = document.querySelector("#receiving-batch-message");
+      if (!batchId) return;
+      message.textContent = "Scanning nearby RFID tags...";
+      try {
+        const result = await request(`/v1/admin/receiving-batches/${encodeURIComponent(batchId)}/scan`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-tenant-id": currentIdentity.tenantId },
+          body: JSON.stringify({ scanCount: 5 })
+        });
+        const index = currentReceivingBatches.findIndex(batch => batch.batchId === batchId);
+        currentReceivingBatches[index] = result.batch;
+        renderReceivingBatches(currentReceivingBatches);
+        document.querySelector("#receiving-batch-select").value = batchId;
+        renderReceivingBatch(result.batch);
+        if (!result.detectedQuantity) message.textContent = "No tag detected. Reposition the tags and scan again.";
+      } catch (error) {
+        message.textContent = error.message;
+      }
+    });
+    document.querySelector("#receiving-batch-approve").addEventListener("click", async () => {
+      const batchId = document.querySelector("#receiving-batch-select").value;
+      const batch = currentReceivingBatches.find(item => item.batchId === batchId);
+      if (!batch?.canApprove || !confirm(`Approve ${batch.scannedQuantity} units into inventory?`)) return;
+      const message = document.querySelector("#receiving-batch-message");
+      message.textContent = "Approving reconciled batch...";
+      try {
+        await request(`/v1/admin/receiving-batches/${encodeURIComponent(batchId)}/approve`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-tenant-id": currentIdentity.tenantId }
+        });
+        await load();
+        showRoute("receiving");
+      } catch (error) {
+        message.textContent = error.message;
+      }
+    });
+    document.querySelector("#receiving-batch-tags").addEventListener("click", async event => {
+      const button = event.target.closest("[data-remove-receiving-epc]");
+      if (!button) return;
+      const batchId = document.querySelector("#receiving-batch-select").value;
+      const message = document.querySelector("#receiving-batch-message");
+      try {
+        const batch = await request(
+          `/v1/admin/receiving-batches/${encodeURIComponent(batchId)}/tags/${encodeURIComponent(button.dataset.removeReceivingEpc)}`,
+          { method: "DELETE", headers: { "x-tenant-id": currentIdentity.tenantId } }
+        );
+        const index = currentReceivingBatches.findIndex(item => item.batchId === batchId);
+        currentReceivingBatches[index] = batch;
+        renderReceivingBatches(currentReceivingBatches);
+        document.querySelector("#receiving-batch-select").value = batchId;
+        renderReceivingBatch(batch);
+      } catch (error) {
+        message.textContent = error.message;
+      }
+    });
+    document.querySelector("#zoho-catalog-search").addEventListener("input", () => {
+      if (zohoCatalogData && zohoCatalogRfidSummary) renderZohoCatalog(zohoCatalogData, zohoCatalogRfidSummary);
+    });
+    document.querySelector("#zoho-catalog-status").addEventListener("change", () => {
+      if (zohoCatalogData && zohoCatalogRfidSummary) renderZohoCatalog(zohoCatalogData, zohoCatalogRfidSummary);
+    });
     document.querySelectorAll("[data-route]").forEach(link => {
       link.addEventListener("click", event => {
         event.preventDefault();
@@ -657,6 +1485,325 @@
       location.replace("/login");
     });
     document.querySelector("#cancel-user").addEventListener("click", resetUserForm);
+    document.querySelector("#catalog-product-form").addEventListener("submit", async event => {
+      event.preventDefault();
+      const message = document.querySelector("#catalog-product-message");
+      message.textContent = "Saving product...";
+      try {
+        const result = await request("/v1/admin/catalog/import", {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-tenant-id": currentIdentity.tenantId },
+          body: JSON.stringify({ products: [{
+            sku: document.querySelector("#catalog-sku").value.trim(),
+            name: document.querySelector("#catalog-name").value.trim(),
+            category: document.querySelector("#catalog-category").value.trim(),
+            unitsPerBox: Number(document.querySelector("#catalog-box").value),
+            boxesPerPallet: Number(document.querySelector("#catalog-pallet").value),
+            size: document.querySelector("#catalog-size").value.trim(),
+            color: document.querySelector("#catalog-color").value.trim()
+          }] })
+        });
+        message.textContent = `${result.imported} product saved.`;
+        event.currentTarget.reset();
+        document.querySelector("#catalog-box").value = "1";
+        document.querySelector("#catalog-pallet").value = "1";
+        await load();
+      } catch (error) {
+        message.textContent = error.message;
+      }
+    });
+    async function uploadCsv(form, inputSelector, endpoint, messageSelector, successLabel) {
+      const message = document.querySelector(messageSelector);
+      const file = document.querySelector(inputSelector).files[0];
+      message.textContent = "Uploading CSV...";
+      try {
+        const result = await request(endpoint, {
+          method: "POST",
+          headers: { "content-type": "text/csv", "x-tenant-id": currentIdentity.tenantId },
+          body: await file.text()
+        });
+        const count = result.imported ?? result.registered ?? 0;
+        message.textContent = `${count} ${successLabel}.`;
+        form.reset();
+        await load();
+      } catch (error) {
+        message.textContent = error.message;
+      }
+    }
+    document.querySelector("#catalog-csv-form").addEventListener("submit", event => {
+      event.preventDefault();
+      uploadCsv(event.currentTarget, "#catalog-csv", "/v1/admin/catalog/import", "#catalog-csv-message", "products imported");
+    });
+    document.querySelector("#asset-csv-form").addEventListener("submit", event => {
+      event.preventDefault();
+      uploadCsv(event.currentTarget, "#asset-csv", "/v1/admin/assets/register", "#asset-csv-message", "tagged items registered");
+    });
+    document.querySelector("#encoding-batch-form").addEventListener("submit", async event => {
+      event.preventDefault();
+      const message = document.querySelector("#encoding-batch-message");
+      try {
+        message.textContent = "Allocating unique EPCs and creating the durable queue...";
+        const result = await request("/v1/admin/encoding/batches", {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-tenant-id": currentIdentity.tenantId },
+          body: JSON.stringify({
+            sku: document.querySelector("#encoding-product").value,
+            requestedQuantity: Number(document.querySelector("#encoding-batch-quantity").value),
+            epcScheme: "GTX96"
+          })
+        });
+        message.textContent = `Batch ${result.batchId} created with ${number.format(result.requestedQuantity)} unique EPC jobs.`;
+        await load();
+      } catch (error) {
+        message.textContent = error.message;
+      }
+    });
+    async function registerTag(epc) {
+      return request("/v1/admin/zoho/assets/register", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-tenant-id": currentIdentity.tenantId },
+        body: JSON.stringify({
+          sku: document.querySelector("#encoding-product").value,
+          epc,
+          unitsPerBox: Number(document.querySelector("#encoding-box").value),
+          boxesPerPallet: Number(document.querySelector("#encoding-pallet").value),
+          category: document.querySelector("#encoding-category").value.trim()
+        })
+      });
+    }
+    document.querySelector("#encoding-read").addEventListener("click", async () => {
+      const message = document.querySelector("#encoding-read-result");
+      message.textContent = "Reading the tag...";
+      try {
+        const result = await request("/v1/admin/hardware/rru9809/scan", {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-tenant-id": currentIdentity.tenantId },
+          body: JSON.stringify({ scanCount: 3 })
+        });
+        const epcs = [...new Set(result.reads.map(read => read.epc))];
+        if (epcs.length === 0) {
+          throw new Error("No RFID tag was detected. Reposition one tag and try again.");
+        }
+        if (epcs.length > 1) {
+          throw new Error(`${epcs.length} RFID tags were detected. Keep exactly one tag near the reader.`);
+        }
+        const epc = epcs[0];
+        const asset = currentAssets.find(item => item.epc === epc);
+        if (!asset?.sku) {
+          message.innerHTML = `<strong>EPC:</strong> <span class="mono">${escapeHtml(epc)}</span><br>` +
+            `This tag is not registered to a product. The tag was not changed.`;
+          return;
+        }
+        const product = currentCatalogProducts.find(item => item.sku === asset.sku);
+        const location = [asset.facilityId, asset.zoneId].filter(Boolean).join(" / ") || "Not observed yet";
+        message.innerHTML = `<strong>EPC:</strong> <span class="mono">${escapeHtml(epc)}</span><br>` +
+          `<strong>Product:</strong> ${escapeHtml(product?.name || asset.sku)} &nbsp; ` +
+          `<strong>SKU:</strong> <span class="mono">${escapeHtml(asset.sku)}</span><br>` +
+          `<strong>Status:</strong> ${escapeHtml(asset.assetStatus || "active")} &nbsp; ` +
+          `<strong>Location:</strong> ${escapeHtml(location)}<br>` +
+          `Read-only check complete. The tag was not changed.`;
+      } catch (error) {
+        message.textContent = error.message;
+      }
+    });
+    document.querySelector("#encoding-form").addEventListener("submit", async event => {
+      event.preventDefault();
+      const message = document.querySelector("#encoding-message");
+      message.textContent = "Registering tag...";
+      try {
+        const epc = document.querySelector("#encoding-epc").value.trim().toUpperCase();
+        if (!epc) throw new Error("Read or enter an EPC first.");
+        const result = await registerTag(epc);
+        message.textContent = result.registered
+          ? `Registered ${result.sku}. It will appear in RFID inventory after its first reader scan.`
+          : `This EPC was already registered to ${result.sku}.`;
+        document.querySelector("#encoding-epc").value = "";
+        document.querySelector("#encoding-epc").focus();
+      } catch (error) {
+        message.textContent = error.message;
+      }
+    });
+    document.querySelector("#batch-form").addEventListener("submit", async event => {
+      event.preventDefault();
+      const message = document.querySelector("#batch-message");
+      const progress = document.querySelector("#batch-progress");
+      try {
+        message.classList.remove("success");
+        const requested = Number(document.querySelector("#batch-quantity").value);
+        if (!batchTarget || batchCompleted >= batchTarget) {
+          batchTarget = requested;
+          batchCompleted = 0;
+        }
+        message.textContent = "Writing and verifying the tag...";
+        const written = await request("/v1/admin/hardware/rru9809/write", {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-tenant-id": currentIdentity.tenantId },
+          body: "{}"
+        });
+        await registerTag(written.epc);
+        const facility = currentFacilities[0];
+        if (facility) {
+          await request("/v1/admin/hardware/rru9809/scan", {
+            method: "POST",
+            headers: { "content-type": "application/json", "x-tenant-id": currentIdentity.tenantId },
+            body: JSON.stringify({ facilityId: facility.facilityId, zoneId: "receiving", scanCount: 1 })
+          });
+        }
+        batchCompleted += 1;
+        progress.textContent = `${batchCompleted} of ${batchTarget} tags written, verified and registered. ${
+          batchCompleted < batchTarget ? "Remove this tag and place the next blank tag." : "Batch complete."
+        }`;
+        message.classList.add("success");
+        message.textContent = `Verified EPC ${written.epc}`;
+        document.querySelector("#batch-next").textContent =
+          batchCompleted < batchTarget ? "Write next tag" : "Start another batch";
+      } catch (error) {
+        message.classList.remove("success");
+        message.textContent = error.message;
+      }
+    });
+    document.querySelector("#shipment-scan").addEventListener("click", async () => {
+      const message = document.querySelector("#shipment-message");
+      const button = document.querySelector("#shipment-scan");
+      try {
+        button.disabled = true;
+        button.textContent = "Okunuyor...";
+        const result = await request("/v1/admin/hardware/rru9809/scan", {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-tenant-id": currentIdentity.tenantId },
+          body: JSON.stringify({ scanCount: 5 })
+        });
+        const inventoryByEpc = new Map(currentAssets.map(asset => [asset.epc, asset]));
+        const detected = [...new Set((result.reads || []).map(read => read.epc))];
+        const accepted = detected.filter(epc => {
+          const asset = inventoryByEpc.get(epc);
+          return asset && asset.assetStatus === "active";
+        });
+        const rejected = detected.length - accepted.length;
+        const before = outgoingPackageEpcs.size;
+        accepted.forEach(epc => outgoingPackageEpcs.add(epc));
+        const added = outgoingPackageEpcs.size - before;
+        renderOutgoingPackage();
+        message.classList.add("success");
+        message.textContent = `${number.format(added)} yeni ürün pakete eklendi${rejected ? ` · ${number.format(rejected)} kayıtlı/aktif olmayan etiket alınmadı` : ""}.`;
+      } catch (error) {
+        message.classList.remove("success");
+        message.textContent = error.message;
+      } finally {
+        button.disabled = false;
+        button.textContent = "Ürünleri toplu okut";
+      }
+    });
+    document.querySelector("#shipment-clear").addEventListener("click", () => {
+      outgoingPackageEpcs.clear();
+      renderOutgoingPackage();
+      const message = document.querySelector("#shipment-message");
+      message.classList.remove("success");
+      message.textContent = "Paket temizlendi.";
+    });
+    document.querySelector("#shipment-form").addEventListener("submit", async event => {
+      event.preventDefault();
+      const message = document.querySelector("#shipment-message");
+      try {
+        const epcs = [...outgoingPackageEpcs];
+        if (!epcs.length) throw new Error("Önce gönderilecek fiziksel ürünleri toplu okutun.");
+        const reference = document.querySelector("#shipment-reference").value.trim();
+        const result = await request("/v1/admin/shipments", {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-tenant-id": currentIdentity.tenantId },
+          body: JSON.stringify({
+            shipmentId: `shipment-${Date.now()}`,
+            customerTenantId: document.querySelector("#shipment-hotel").value,
+            destinationFacilityId: document.querySelector("#shipment-facility").value,
+            reference,
+            epcs
+          })
+        });
+        message.textContent = `${result.reference || result.shipmentId} paketi ${number.format(result.assetCount)} ürünle sevkiyata hazırlandı.`;
+        outgoingPackageEpcs.clear();
+        document.querySelector("#shipment-form").reset();
+        await load();
+      } catch (error) {
+        message.textContent = error.message;
+      }
+    });
+    document.querySelector("#receiving-start").addEventListener("click", async () => {
+      const message = document.querySelector("#receiving-message");
+      try {
+        const shipmentId = document.querySelector("#receiving-shipment").value;
+        const shipment = currentShipments.find(item => item.shipmentId === shipmentId);
+        if (!shipment) throw new Error("Select an incoming shipment.");
+        activeReceivingSession = await request("/v1/admin/sessions", {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-tenant-id": currentIdentity.tenantId },
+          body: JSON.stringify({
+            facilityId: shipment.destinationFacilityId,
+            zoneId: "receiving",
+            type: "receiving",
+            reference: shipment.reference || shipment.shipmentId
+          })
+        });
+        document.querySelector("#receiving-scan").disabled = false;
+        document.querySelector("#receiving-accept").disabled = false;
+        document.querySelector("#receiving-progress").textContent = "Receiving started. Place the delivery tags on the reader and press Scan tags.";
+        message.textContent = "";
+      } catch (error) {
+        message.textContent = error.message;
+      }
+    });
+    async function refreshReconciliation() {
+      const shipmentId = document.querySelector("#receiving-shipment").value;
+      const result = await request(
+        `/v1/admin/shipments/${encodeURIComponent(shipmentId)}/reconciliation?sessionId=${encodeURIComponent(activeReceivingSession.sessionId)}`,
+        tenantOptions(currentIdentity.tenantId)
+      );
+      document.querySelector("#receiving-progress").textContent =
+        `Expected ${result.expectedCount} · read ${result.receivedCount} · missing ${result.missingCount} · unexpected ${result.unexpectedCount}`;
+      return result;
+    }
+    document.querySelector("#receiving-scan").addEventListener("click", async () => {
+      const message = document.querySelector("#receiving-message");
+      try {
+        const shipmentId = document.querySelector("#receiving-shipment").value;
+        const shipment = currentShipments.find(item => item.shipmentId === shipmentId);
+        const result = await request("/v1/admin/hardware/rru9809/scan", {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-tenant-id": currentIdentity.tenantId },
+          body: JSON.stringify({
+            facilityId: shipment.destinationFacilityId,
+            zoneId: "receiving",
+            sessionId: activeReceivingSession.sessionId,
+            scanCount: 3
+          })
+        });
+        message.textContent = `${result.reads.length} reader observations received.`;
+        await refreshReconciliation();
+      } catch (error) {
+        message.textContent = error.message;
+      }
+    });
+    document.querySelector("#receiving-accept").addEventListener("click", async () => {
+      const message = document.querySelector("#receiving-message");
+      try {
+        const reconciliation = await refreshReconciliation();
+        if (reconciliation.missingCount || reconciliation.unexpectedCount) {
+          throw new Error("Resolve missing or unexpected tags before accepting this delivery.");
+        }
+        const shipmentId = document.querySelector("#receiving-shipment").value;
+        const result = await request(`/v1/admin/shipments/${encodeURIComponent(shipmentId)}/accept`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-tenant-id": currentIdentity.tenantId },
+          body: JSON.stringify({ sessionId: activeReceivingSession.sessionId })
+        });
+        message.textContent = `Delivery accepted. ${result.shipment.acceptedAssetCount} tagged units transferred to this hotel.`;
+        activeReceivingSession = null;
+        document.querySelector("#receiving-scan").disabled = true;
+        document.querySelector("#receiving-accept").disabled = true;
+        await load();
+      } catch (error) {
+        message.textContent = error.message;
+      }
+    });
     document.querySelector("#user-form").addEventListener("submit", async event => {
       event.preventDefault();
       const message = document.querySelector("#user-message");

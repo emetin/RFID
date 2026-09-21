@@ -4,6 +4,7 @@ import { gatewayStatus } from "./gateway-health.js";
 import { movementDecision } from "./movement-policy.js";
 import { PostgresDatabase } from "./postgres-database.js";
 import { ASSET_STATUSES, validateAssetTransition } from "./asset-lifecycle.js";
+import { commissioningEvent } from "../standards/epcis.js";
 
 function iso(value) {
   return value == null ? null : new Date(value).toISOString();
@@ -19,6 +20,11 @@ export class PostgresStore {
 
   async close() {
     await this.#database.close();
+  }
+
+  async readinessCheck() {
+    const health = await this.#database.healthCheck();
+    return { status: "ready", store: "postgres", latencyMs: health.latencyMs };
   }
 
   async createAdminUser({
@@ -395,6 +401,158 @@ export class PostgresStore {
     });
   }
 
+  async createEncodingBatch(tenantId, {
+    sku, requestedQuantity, epcScheme = "GTX96",
+    batchId = randomUUID(), createdAt = new Date().toISOString()
+  }) {
+    const quantity = Number(requestedQuantity);
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100_000) {
+      throw new Error("requestedQuantity must be an integer between 1 and 100000");
+    }
+    if (epcScheme !== "GTX96") throw new Error("Unsupported EPC scheme");
+    const tenant = await this.#tenant(tenantId);
+    return this.#database.tenantTransaction(tenant, async (client) => {
+      const product = await client.query(`
+        SELECT id FROM products WHERE tenant_id = $1 AND sku = $2 AND active = true
+      `, [tenant, sku]);
+      if (!product.rows[0]) throw new Error("Unknown or inactive SKU");
+      await client.query(`
+        INSERT INTO encoding_batches (
+          id, tenant_id, product_id, requested_quantity, epc_scheme, status, created_at
+        ) VALUES ($1,$2,$3,$4,$5,'planned',$6)
+      `, [batchId, tenant, product.rows[0].id, quantity, epcScheme, createdAt]);
+      await client.query(`
+        INSERT INTO encoding_jobs (
+          batch_id, tenant_id, sequence_number, epc, status, updated_at
+        )
+        SELECT $1, $2, sequence_number,
+          '475458' || upper(lpad(to_hex(nextval('globaltex_epc_serial_seq')), 18, '0')),
+          'queued', $4
+        FROM generate_series(1, $3) AS sequence_number
+      `, [batchId, tenant, quantity, createdAt]);
+      return this.#encodingBatch(client, tenantId, batchId);
+    });
+  }
+
+  async encodingBatchesFor(tenantId, { limit = 100 } = {}) {
+    const tenant = await this.#tenant(tenantId);
+    return this.#database.tenantTransaction(tenant, async (client) => {
+      const { rows } = await client.query(`
+        SELECT id FROM encoding_batches ORDER BY created_at DESC LIMIT $1
+      `, [Math.min(Math.max(Number(limit) || 100, 1), 500)]);
+      return Promise.all(rows.map((row) => this.#encodingBatch(client, tenantId, row.id)));
+    });
+  }
+
+  async encodingBatchFor(tenantId, batchId) {
+    const tenant = await this.#tenant(tenantId);
+    return this.#database.tenantTransaction(tenant, (client) =>
+      this.#encodingBatch(client, tenantId, batchId)
+    );
+  }
+
+  async claimEncodingJob(tenantId, {
+    stationId, leaseSeconds = 60, now = new Date().toISOString()
+  }) {
+    if (!stationId) throw new Error("stationId is required");
+    const seconds = Math.min(Math.max(Number(leaseSeconds) || 60, 15), 600);
+    const tenant = await this.#tenant(tenantId);
+    return this.#database.tenantTransaction(tenant, async (client) => {
+      await client.query(`
+        UPDATE encoding_jobs SET status = 'queued', station_id = NULL,
+          lease_token = NULL, lease_until = NULL, updated_at = $2
+        WHERE tenant_id = $1 AND status = 'leased' AND lease_until <= $2
+      `, [tenant, now]);
+      const { rows } = await client.query(`
+        WITH candidate AS (
+          SELECT id FROM encoding_jobs
+          WHERE tenant_id = $1 AND status = 'queued'
+          ORDER BY batch_id, sequence_number
+          FOR UPDATE SKIP LOCKED LIMIT 1
+        )
+        UPDATE encoding_jobs job SET
+          status = 'leased', station_id = $2, lease_token = gen_random_uuid(),
+          lease_until = $3::timestamptz + ($4 * interval '1 second'),
+          attempts = attempts + 1, updated_at = $3
+        FROM candidate WHERE job.id = candidate.id
+        RETURNING job.*
+      `, [tenant, stationId, now, seconds]);
+      if (!rows[0]) return null;
+      const row = rows[0];
+      await client.query(`
+        UPDATE encoding_batches SET status = 'encoding', started_at = COALESCE(started_at, $2)
+        WHERE id = $1 AND status = 'planned'
+      `, [row.batch_id, now]);
+      return {
+        jobId: row.id, batchId: row.batch_id, sequenceNumber: row.sequence_number,
+        epc: row.epc, stationId, leaseToken: row.lease_token,
+        leaseUntil: iso(row.lease_until), attempts: row.attempts
+      };
+    });
+  }
+
+  async finishEncodingJob(tenantId, {
+    jobId, stationId, leaseToken, observedEpc = null, tid = null,
+    previousEpc = null, errorCode = null, errorMessage = null,
+    now = new Date().toISOString()
+  }) {
+    const tenant = await this.#tenant(tenantId);
+    return this.#database.tenantTransaction(tenant, async (client) => {
+      const { rows } = await client.query(`
+        SELECT job.*, batch.requested_quantity, batch.product_id
+        FROM encoding_jobs job JOIN encoding_batches batch ON batch.id = job.batch_id
+        WHERE job.tenant_id = $1 AND job.id = $2 FOR UPDATE
+      `, [tenant, jobId]);
+      const job = rows[0];
+      if (!job) throw new Error("Unknown encoding job");
+      if (job.status !== "leased" || job.station_id !== stationId || String(job.lease_token) !== leaseToken) {
+        throw new Error("Encoding job lease is not owned by this station");
+      }
+      if (Date.parse(job.lease_until) <= Date.parse(now)) throw new Error("Encoding job lease expired");
+      const verified = !errorCode && observedEpc === job.epc;
+      const finalErrorCode = verified ? null : (errorCode || "readback_mismatch");
+      const finalErrorMessage = verified ? null : (errorMessage || "Observed EPC does not match allocation");
+      await client.query(`
+        UPDATE encoding_jobs SET status = $2, previous_epc = $3, tid = $4,
+          error_code = $5, error_message = $6, written_at = $7,
+          verified_at = $8, lease_token = NULL, lease_until = NULL, updated_at = $7
+        WHERE id = $1
+      `, [jobId, verified ? "verified" : "failed", previousEpc, tid,
+        finalErrorCode, finalErrorMessage, now, verified ? now : null]);
+      if (verified) {
+        await client.query(`
+          INSERT INTO rfid_assets (
+            tenant_id, epc, product_id, encoding_batch_id, tid,
+            status, encoding_status, encoded_at, verified_at
+          ) VALUES ($1,$2,$3,$4,$5,'active','verified',$6,$6)
+          ON CONFLICT (tenant_id, epc) DO NOTHING
+        `, [tenant, job.epc, job.product_id, job.batch_id, tid, now]);
+      } else {
+        await client.query(`
+          INSERT INTO encoding_jobs (
+            batch_id, tenant_id, sequence_number, epc, status, updated_at
+          ) SELECT $1, $2, COALESCE(MAX(sequence_number), 0) + 1,
+            '475458' || upper(lpad(to_hex(nextval('globaltex_epc_serial_seq')), 18, '0')),
+            'queued', $3 FROM encoding_jobs WHERE batch_id = $1
+        `, [job.batch_id, tenant, now]);
+      }
+      const count = await client.query(`
+        SELECT COUNT(*)::integer AS count FROM encoding_jobs
+        WHERE batch_id = $1 AND status = 'verified'
+      `, [job.batch_id]);
+      if (count.rows[0].count >= job.requested_quantity) {
+        await client.query(`
+          UPDATE encoding_batches SET status = 'completed', completed_at = $2 WHERE id = $1
+        `, [job.batch_id, now]);
+      }
+      return {
+        verified,
+        job: await this.#encodingJob(client, jobId),
+        batch: await this.#encodingBatch(client, tenantId, job.batch_id)
+      };
+    });
+  }
+
   async productsFor(tenantId) {
     const tenant = await this.#tenant(tenantId);
     return this.#database.tenantTransaction(tenant, async (client) => {
@@ -464,6 +622,202 @@ export class PostgresStore {
         registered += 1;
       }
       return { registered, unchanged };
+    });
+  }
+
+  async createReceivingBatch({
+    tenantId,
+    sku,
+    expectedQuantity,
+    facilityId,
+    zoneId,
+    reference = null,
+    batchId = randomUUID(),
+    createdAt = new Date().toISOString()
+  }) {
+    if (!Number.isInteger(expectedQuantity) || expectedQuantity < 1) {
+      throw new Error("Expected quantity must be a positive integer");
+    }
+    const tenant = await this.#tenant(tenantId);
+    return this.#database.tenantTransaction(tenant, async (client) => {
+      const context = await client.query(`
+        SELECT p.id AS product_id, f.id AS facility_id, z.id AS zone_id
+        FROM products p, facilities f, zones z
+        WHERE p.tenant_id = $1 AND p.sku = $2
+          AND f.tenant_id = $1 AND f.code = $3
+          AND z.tenant_id = $1 AND z.code = $4 AND z.facility_id = f.id
+      `, [tenant, sku, facilityId, zoneId]);
+      if (context.rowCount !== 1) throw new Error("Unknown product or receiving location");
+      await client.query(`
+        INSERT INTO receiving_batches (
+          id, tenant_id, product_id, expected_quantity, facility_id,
+          zone_id, reference, status, created_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,'draft',$8)
+      `, [
+        batchId,
+        tenant,
+        context.rows[0].product_id,
+        expectedQuantity,
+        context.rows[0].facility_id,
+        context.rows[0].zone_id,
+        reference,
+        createdAt
+      ]);
+      return this.#receivingBatch(client, tenantId, tenant, batchId);
+    });
+  }
+
+  async receivingBatchesFor(tenantId) {
+    const tenant = await this.#tenant(tenantId);
+    return this.#database.tenantTransaction(tenant, async (client) => {
+      const { rows } = await client.query(`
+        SELECT id FROM receiving_batches ORDER BY created_at DESC
+      `);
+      const batches = [];
+      for (const row of rows) batches.push(await this.#receivingBatch(client, tenantId, tenant, row.id));
+      return batches;
+    });
+  }
+
+  async receivingBatchFor(tenantId, batchId) {
+    const tenant = await this.#tenant(tenantId);
+    return this.#database.tenantTransaction(
+      tenant,
+      (client) => this.#receivingBatch(client, tenantId, tenant, batchId)
+    );
+  }
+
+  async addReceivingBatchReads({
+    tenantId,
+    batchId,
+    epcs,
+    observedAt = new Date().toISOString()
+  }) {
+    const tenant = await this.#tenant(tenantId);
+    return this.#database.tenantTransaction(tenant, async (client) => {
+      const batch = await client.query(`
+        SELECT status FROM receiving_batches WHERE id = $1 FOR UPDATE
+      `, [batchId]);
+      if (batch.rowCount !== 1) throw new Error("Unknown receiving batch");
+      if (batch.rows[0].status !== "draft") throw new Error("Receiving batch is not open");
+      for (const value of epcs) {
+        const epc = String(value ?? "").toUpperCase();
+        if (!/^[0-9A-F]{8,96}$/.test(epc)) throw new Error(`Invalid EPC: ${epc}`);
+        await client.query(`
+          INSERT INTO receiving_batch_tags (
+            batch_id, tenant_id, epc, first_seen_at, last_seen_at, read_count
+          ) VALUES ($1,$2,$3,$4,$4,1)
+          ON CONFLICT (batch_id, epc) DO UPDATE SET
+            last_seen_at = EXCLUDED.last_seen_at,
+            read_count = receiving_batch_tags.read_count + 1
+        `, [batchId, tenant, epc, observedAt]);
+      }
+      return this.#receivingBatch(client, tenantId, tenant, batchId);
+    });
+  }
+
+  async removeReceivingBatchTag({ tenantId, batchId, epc }) {
+    const tenant = await this.#tenant(tenantId);
+    return this.#database.tenantTransaction(tenant, async (client) => {
+      const batch = await client.query(`
+        SELECT status FROM receiving_batches WHERE id = $1 FOR UPDATE
+      `, [batchId]);
+      if (batch.rowCount !== 1) throw new Error("Unknown receiving batch");
+      if (batch.rows[0].status !== "draft") throw new Error("Receiving batch is not open");
+      await client.query(`
+        DELETE FROM receiving_batch_tags WHERE batch_id = $1 AND epc = $2
+      `, [batchId, String(epc).toUpperCase()]);
+      return this.#receivingBatch(client, tenantId, tenant, batchId);
+    });
+  }
+
+  async approveReceivingBatch({ tenantId, batchId, actorId, approvedAt = new Date().toISOString() }) {
+    const tenant = await this.#tenant(tenantId);
+    return this.#database.tenantTransaction(tenant, async (client) => {
+      const locked = await client.query(`
+        SELECT status FROM receiving_batches WHERE id = $1 FOR UPDATE
+      `, [batchId]);
+      if (locked.rowCount !== 1) throw new Error("Unknown receiving batch");
+      const detail = await this.#receivingBatch(client, tenantId, tenant, batchId);
+      if (detail.status !== "draft") throw new Error("Receiving batch is not open");
+      if (!detail.canApprove) {
+        throw new Error("Expected quantity, scanned tags and EPC conflicts must reconcile before approval");
+      }
+      const context = await client.query(`
+        SELECT p.id AS product_id, f.id AS facility_id, z.id AS zone_id, r.id AS reader_id
+        FROM products p
+        JOIN receiving_batches b ON b.product_id = p.id
+        JOIN facilities f ON f.id = b.facility_id
+        JOIN zones z ON z.id = b.zone_id
+        LEFT JOIN LATERAL (
+          SELECT id FROM readers
+          WHERE tenant_id = $2 AND facility_id = f.id AND zone_id = z.id
+          ORDER BY last_seen_at DESC NULLS LAST LIMIT 1
+        ) r ON true
+        WHERE b.id = $1
+      `, [batchId, tenant]);
+      if (!context.rows[0]?.reader_id) {
+        throw new Error("No reader is assigned to the receiving location");
+      }
+      for (const tag of detail.tags) {
+        await client.query(`
+          INSERT INTO rfid_assets (
+            tenant_id, epc, product_id, status, encoding_status, encoded_at
+          ) VALUES ($1,$2,$3,'active','registered',$4)
+        `, [tenant, tag.epc, context.rows[0].product_id, approvedAt]);
+        await client.query(`
+          INSERT INTO asset_lifecycle_history (
+            tenant_id, epc, from_status, to_status, reason, actor_id, changed_at
+          ) VALUES ($1,$2,NULL,'active','receiving_batch_approval',$3,$4)
+        `, [tenant, tag.epc, actorId, approvedAt]);
+        await client.query(`
+          INSERT INTO asset_custody_history (
+            epc, custodian_tenant_id, facility_id, change_type, valid_from
+          ) VALUES ($1,$2,$3,'registered',$4)
+        `, [tag.epc, tenant, context.rows[0].facility_id, approvedAt]);
+        await client.query(`
+          INSERT INTO inventory_positions (
+            tenant_id, epc, facility_id, zone_id, reader_id,
+            first_seen_at, last_seen_at, read_count
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        `, [
+          tenant,
+          tag.epc,
+          context.rows[0].facility_id,
+          context.rows[0].zone_id,
+          context.rows[0].reader_id,
+          tag.firstSeenAt,
+          tag.lastSeenAt,
+          tag.readCount
+        ]);
+      }
+      await client.query(`
+        UPDATE receiving_batches
+        SET status = 'approved', approved_at = $2, approved_by = $3
+        WHERE id = $1
+      `, [batchId, approvedAt, actorId]);
+      await client.query(`
+        INSERT INTO audit_events (
+          tenant_id, actor_id, actor_role, action,
+          entity_type, entity_id, details_json, created_at
+        ) VALUES ($1,$2,'chain_admin','receiving_batch.approved',
+                  'receiving_batch',$3,$4,$5)
+      `, [
+        tenant,
+        actorId,
+        batchId,
+        JSON.stringify({
+          sku: detail.sku,
+          quantity: detail.scannedQuantity,
+          epcis: commissioningEvent({
+            epcs: detail.tags.map((tag) => tag.epc),
+            eventTime: approvedAt,
+            businessLocation: context.rows[0].facility_id
+          })
+        }),
+        approvedAt
+      ]);
+      return this.#receivingBatch(client, tenantId, tenant, batchId);
     });
   }
 
@@ -1148,6 +1502,50 @@ export class PostgresStore {
         receivedAt: iso(row.received_at)
       };
       return { ...health, status: gatewayStatus(health, now) };
+    });
+  }
+
+  async consumeCustomerApiRateLimit(clientId, windowStart, limit) {
+    return this.#database.systemTransaction(async (client) => {
+      const { rows } = await client.query(`
+        INSERT INTO customer_api_rate_limits (client_id, window_start, request_count)
+        VALUES ($1, $2, 1)
+        ON CONFLICT (client_id, window_start)
+        DO UPDATE SET request_count = customer_api_rate_limits.request_count + 1
+        RETURNING request_count
+      `, [clientId, windowStart]);
+      await client.query(
+        "DELETE FROM customer_api_rate_limits WHERE window_start < $1",
+        [windowStart - 2]
+      );
+      return { allowed: rows[0].request_count <= limit, count: rows[0].request_count };
+    });
+  }
+
+  async customerApiIdempotencyGet({ tenantId, clientId, method, path, idempotencyKey }) {
+    return this.#database.systemTransaction(async (client) => {
+      const { rows } = await client.query(`
+        SELECT response FROM customer_api_idempotency
+        WHERE tenant_slug = $1 AND client_id = $2 AND method = $3
+          AND path = $4 AND idempotency_key = $5
+      `, [tenantId, clientId, method, path, idempotencyKey]);
+      return rows[0]?.response ?? null;
+    });
+  }
+
+  async customerApiIdempotencyPut({
+    tenantId, clientId, method, path, idempotencyKey, response, createdAt = new Date().toISOString()
+  }) {
+    return this.#database.systemTransaction(async (client) => {
+      const { rows } = await client.query(`
+        INSERT INTO customer_api_idempotency (
+          tenant_slug, client_id, method, path, idempotency_key, response, created_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7)
+        ON CONFLICT (tenant_slug, client_id, method, path, idempotency_key)
+        DO UPDATE SET response = customer_api_idempotency.response
+        RETURNING response
+      `, [tenantId, clientId, method, path, idempotencyKey, response, createdAt]);
+      return rows[0].response;
     });
   }
 
@@ -2103,5 +2501,92 @@ export class PostgresStore {
       }
     }
     return this.alertsFor(tenantId, { limit: 500 });
+  }
+
+  async #receivingBatch(client, tenantId, tenant, batchId) {
+    const batchResult = await client.query(`
+      SELECT batch.*, product.sku, facility.code AS facility_code, zone.code AS zone_code
+      FROM receiving_batches batch
+      JOIN products product ON product.id = batch.product_id
+      JOIN facilities facility ON facility.id = batch.facility_id
+      JOIN zones zone ON zone.id = batch.zone_id
+      WHERE batch.id = $1 AND batch.tenant_id = $2
+    `, [batchId, tenant]);
+    const row = batchResult.rows[0];
+    if (!row) throw new Error("Unknown receiving batch");
+    const tagResult = await client.query(`
+      SELECT tag.*, asset.tenant_id AS existing_tenant_id, product.sku AS existing_sku
+      FROM receiving_batch_tags tag
+      LEFT JOIN rfid_assets asset ON asset.epc = tag.epc
+      LEFT JOIN products product ON product.id = asset.product_id
+      WHERE tag.batch_id = $1 ORDER BY tag.epc
+    `, [batchId]);
+    const tags = tagResult.rows.map((tag) => ({
+      epc: tag.epc,
+      firstSeenAt: iso(tag.first_seen_at),
+      lastSeenAt: iso(tag.last_seen_at),
+      readCount: tag.read_count,
+      existingTenantId: tag.existing_tenant_id ?? null,
+      existingSku: tag.existing_sku ?? null
+    }));
+    const conflictEpcs = tags.filter((tag) => tag.existingTenantId).map((tag) => tag.epc);
+    return {
+      batchId: row.id,
+      tenantId,
+      sku: row.sku,
+      expectedQuantity: row.expected_quantity,
+      facilityId: row.facility_code,
+      zoneId: row.zone_code,
+      reference: row.reference,
+      status: row.status,
+      createdAt: iso(row.created_at),
+      approvedAt: iso(row.approved_at),
+      approvedBy: row.approved_by,
+      tags,
+      scannedQuantity: tags.length,
+      remainingQuantity: Math.max(row.expected_quantity - tags.length, 0),
+      overageQuantity: Math.max(tags.length - row.expected_quantity, 0),
+      conflictEpcs,
+      canApprove: row.status === "draft" &&
+        tags.length === row.expected_quantity && conflictEpcs.length === 0
+    };
+  }
+
+  async #encodingJob(client, jobId) {
+    const { rows } = await client.query(`SELECT * FROM encoding_jobs WHERE id = $1`, [jobId]);
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      jobId: row.id, batchId: row.batch_id, sequenceNumber: row.sequence_number,
+      epc: row.epc, status: row.status, stationId: row.station_id,
+      leaseUntil: iso(row.lease_until), attempts: row.attempts, previousEpc: row.previous_epc,
+      tid: row.tid, errorCode: row.error_code, errorMessage: row.error_message,
+      writtenAt: iso(row.written_at), verifiedAt: iso(row.verified_at), updatedAt: iso(row.updated_at)
+    };
+  }
+
+  async #encodingBatch(client, tenantId, batchId) {
+    const { rows } = await client.query(`
+      SELECT batch.*, product.sku,
+        COUNT(job.id) FILTER (WHERE job.status = 'queued')::integer AS queued_count,
+        COUNT(job.id) FILTER (WHERE job.status = 'leased')::integer AS leased_count,
+        COUNT(job.id) FILTER (WHERE job.status = 'verified')::integer AS verified_count,
+        COUNT(job.id) FILTER (WHERE job.status = 'failed')::integer AS failed_count,
+        COUNT(job.id)::integer AS total_jobs
+      FROM encoding_batches batch
+      JOIN products product ON product.id = batch.product_id
+      LEFT JOIN encoding_jobs job ON job.batch_id = batch.id
+      WHERE batch.id = $1
+      GROUP BY batch.id, product.sku
+    `, [batchId]);
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      batchId: row.id, tenantId, sku: row.sku,
+      requestedQuantity: row.requested_quantity, epcScheme: row.epc_scheme,
+      status: row.status, queued: row.queued_count, leased: row.leased_count,
+      verified: row.verified_count, failed: row.failed_count, totalJobs: row.total_jobs,
+      createdAt: iso(row.created_at), startedAt: iso(row.started_at), completedAt: iso(row.completed_at)
+    };
   }
 }

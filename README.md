@@ -81,6 +81,23 @@ In another terminal, run the hardware-free reader:
 npm run gateway:simulate
 ```
 
+### RRU9809USB-L desktop reader/writer
+
+Install the Silicon Labs CP210x VCP driver, connect the reader over USB and
+confirm its COM port in Windows Device Manager. The built-in adapter uses the
+vendor's 57600-baud binary protocol and sends real EPC observations through the
+same encrypted Edge queue as every other Gateway:
+
+```powershell
+$env:REGULATORY_REGION='ETSI_TR'
+$env:ADAPTER_CONFIG='{"port":"COM4","baudRate":57600,"scanCount":3}'
+npm run gateway:rru9809
+```
+
+The adapter verifies the connected reader, validates response CRC values and
+performs read-only inventory scans. EPC writing remains a controlled encoding
+operation and is not performed by the inventory Gateway command.
+
 Refresh the dashboard to see five units represented as one full pallet and one loose unit. Run the simulator again to verify retry-safe inventory: new read events increase read counts, while unique inventory remains five units.
 
 The Gateway writes batches to `data/runtime/edge-queue.db` before delivery. If
@@ -185,8 +202,11 @@ No application code changes when the real list arrives. Upload the file to `POST
 - Backup and restore: [disaster recovery runbook](docs/disaster-recovery.md)
 - Raw RFID data lifecycle: [data retention runbook](docs/data-retention.md)
 - RFID exception operations: [exception workflow](docs/exception-workflow.md)
+- Zoho Inventory setup and rollout: [Zoho integration runbook](docs/zoho-inventory-integration.md)
+- Customer catalog onboarding and API integrations: [onboarding guide](docs/customer-onboarding-and-integrations.md)
 - Textile status operations: [asset lifecycle](docs/asset-lifecycle.md)
 - PostgreSQL preparation: [deployment guide](docs/postgresql-deployment.md)
+- Hardened production deployment: [production runbook](docs/production-deployment.md)
 
 ## Current boundary
 

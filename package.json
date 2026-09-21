@@ -9,11 +9,16 @@
   },
   "scripts": {
     "start:api": "node --disable-warning=ExperimentalWarning src/api/server.js",
+    "start:api:pilot": "node --disable-warning=ExperimentalWarning --env-file=data/runtime/local-pilot.env src/api/server.js",
     "demo": "node src/demo.js",
     "gateway:simulate": "node src/gateway/cli.js simulate",
+    "gateway:rru9809": "node src/gateway/cli.js rru9809usb",
     "gateway:stdin": "node src/gateway/cli.js stdin",
     "adapter:test": "node src/gateway/adapters/conformance-cli.js",
     "integration:flush": "node src/integrations/cli.js",
+    "zoho:check": "node --env-file-if-exists=.env src/integrations/zoho-check-cli.js",
+    "zoho:authorize": "node --env-file-if-exists=.env src/integrations/zoho-authorize-cli.js",
+    "zoho:mapping-report": "node --env-file-if-exists=.env src/integrations/zoho-mapping-report-cli.js",
     "backup:create": "node src/ops/backup-cli.js create",
     "backup:verify": "node src/ops/backup-cli.js verify",
     "db:migrate": "node src/ops/postgres-cli.js migrate",
@@ -25,6 +30,7 @@
     "test": "node --disable-warning=ExperimentalWarning --test"
   },
   "dependencies": {
-    "pg": "^8.22.0"
+    "pg": "^8.22.0",
+    "serialport": "^13.0.0"
   }
 }

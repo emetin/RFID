@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
   createSessionToken,
@@ -10,12 +11,39 @@ import {
 import { InventoryStore } from "../core/inventory-store.js";
 import { parseAssetCsv, parseProductCsv } from "../core/csv.js";
 import { calculatePackaging } from "../core/packaging.js";
+import {
+  scanRru9809,
+  writeRru9809Epc
+} from "../gateway/adapters/rru9809usb.js";
+import { gs1UsProfile } from "../standards/gs1.js";
 
 const MAX_BODY_BYTES = 2_000_000;
 const EPC_PATTERN = /^[0-9A-F]{8,96}$/;
 const DASHBOARD = readFileSync(new URL("../../public/dashboard.html", import.meta.url), "utf8");
 const LOGIN = readFileSync(new URL("../../public/login.html", import.meta.url), "utf8");
+const PATAK_LOGO = readFileSync(new URL("../../public/assets/patak-logo.png", import.meta.url));
 const ADMIN_ROLES = new Set(["viewer", "operator", "hotel_admin", "chain_admin"]);
+const CUSTOMER_API_SCOPES = new Set([
+  "catalog:read", "catalog:write", "assets:write", "inventory:read",
+  "encoding:read", "encoding:work"
+]);
+
+function tokenHash(value) {
+  return createHash("sha256").update(String(value)).digest("hex");
+}
+
+function customerPrincipal(request, credentialIndex) {
+  const authorization = String(request.headers.authorization ?? "");
+  if (!authorization.startsWith("Bearer ")) return { error: "customer_api_auth_required" };
+  const credential = credentialIndex.get(tokenHash(authorization.slice(7).trim()));
+  if (!credential) return { error: "customer_api_auth_required" };
+  if (!credential.tenantId || !credential.clientId) return { error: "customer_api_credential_invalid" };
+  const scopes = new Set(credential.scopes ?? []);
+  if ([...scopes].some((scope) => !CUSTOMER_API_SCOPES.has(scope))) {
+    return { error: "customer_api_credential_invalid" };
+  }
+  return { clientId: credential.clientId, tenantId: credential.tenantId, scopes };
+}
 
 function json(response, status, value, headers = {}) {
   const body = JSON.stringify(value);
@@ -35,6 +63,15 @@ function html(response, status, body) {
   response.end(body);
 }
 
+function binary(response, status, body, contentType) {
+  response.writeHead(status, {
+    "content-type": contentType,
+    "content-length": body.length,
+    "cache-control": "public, max-age=3600"
+  });
+  response.end(body);
+}
+
 function cookieValue(request, name) {
   const match = String(request.headers.cookie ?? "")
     .split(";")
@@ -49,7 +86,7 @@ async function identityForCredentials(username, password, admin, store) {
   else if (admin?.token === password) {
     identity = {
       actorId: "local-admin",
-      role: "hotel_admin",
+      role: admin.role ?? "hotel_admin",
       tenantIds: [admin.tenantId]
     };
   }
@@ -132,8 +169,10 @@ function canMutate(principal, pathname) {
   if (principal.role === "hotel_admin" || principal.role === "chain_admin") return true;
   if (principal.role === "viewer") return false;
   return pathname === "/v1/admin/sessions" ||
+    pathname === "/v1/admin/hardware/rru9809/scan" ||
     /^\/v1\/admin\/sessions\/[^/]+\/complete$/.test(pathname) ||
     /^\/v1\/admin\/shipments\/[^/]+\/accept$/.test(pathname) ||
+    /^\/v1\/admin\/receiving-batches(?:\/[^/]+\/(?:scan|approve|tags\/[^/]+))?$/.test(pathname) ||
     /^\/v1\/admin\/assets\/[^/]+\/status$/.test(pathname) ||
     /^\/v1\/admin\/alerts\/[^/]+\/acknowledge$/.test(pathname) ||
     /^\/v1\/admin\/exceptions\/[^/]+\/resolve$/.test(pathname) ||
@@ -306,6 +345,7 @@ function chainSummary(tenantSummaries) {
 export function createApp({
   credentials,
   admin,
+  customerApiCredentials = {},
   store = new InventoryStore(),
   now,
   requireProvisionedReaders = false,
@@ -315,6 +355,9 @@ export function createApp({
   if (!credentials || Object.keys(credentials).length === 0) {
     throw new Error("At least one device credential is required");
   }
+  const customerCredentialIndex = new Map(Object.entries(customerApiCredentials).map(
+    ([token, credential]) => [tokenHash(token), credential]
+  ));
 
   return createServer(async (request, response) => {
     try {
@@ -324,8 +367,20 @@ export function createApp({
         return json(response, 200, { status: "ok" });
       }
 
+      if (request.method === "GET" && url.pathname === "/ready") {
+        try {
+          return json(response, 200, await store.readinessCheck());
+        } catch {
+          return json(response, 503, { status: "not_ready" });
+        }
+      }
+
       if (request.method === "GET" && url.pathname === "/login") {
         return html(response, 200, LOGIN);
+      }
+
+      if (request.method === "GET" && url.pathname === "/assets/patak-logo.png") {
+        return binary(response, 200, PATAK_LOGO, "image/png");
       }
 
       if (request.method === "POST" && url.pathname === "/v1/auth/login") {
@@ -381,6 +436,95 @@ export function createApp({
         return html(response, 200, DASHBOARD);
       }
 
+      if (url.pathname.startsWith("/v1/customer/")) {
+        const principal = customerPrincipal(request, customerCredentialIndex);
+        if (principal.error) return json(response, 401, { error: principal.error });
+
+        const minute = Math.floor((now?.() ?? Date.now()) / 60_000);
+        const rate = await store.consumeCustomerApiRateLimit(principal.clientId, minute, 120);
+        if (!rate.allowed) {
+          return json(response, 429, { error: "customer_api_rate_limit" }, { "retry-after": "60" });
+        }
+
+        const requireScope = (scope) => {
+          if (principal.scopes.has(scope)) return true;
+          json(response, 403, { error: "customer_api_scope_required", scope });
+          return false;
+        };
+        const mutation = !["GET", "HEAD", "OPTIONS"].includes(request.method);
+        const idempotencyKey = String(request.headers["idempotency-key"] ?? "").trim();
+        if (mutation && (!idempotencyKey || idempotencyKey.length > 200)) {
+          return json(response, 400, { error: "idempotency_key_required" });
+        }
+        const idempotency = mutation ? {
+          tenantId: principal.tenantId,
+          clientId: principal.clientId,
+          method: request.method,
+          path: url.pathname,
+          idempotencyKey
+        } : null;
+        const replay = idempotency
+          ? await store.customerApiIdempotencyGet(idempotency)
+          : null;
+        if (replay !== null) {
+          return json(response, 200, replay, { "idempotency-replayed": "true" });
+        }
+
+        let result;
+        if (request.method === "GET" && url.pathname === "/v1/customer/catalog") {
+          if (!requireScope("catalog:read")) return;
+          result = { products: await store.productsFor(principal.tenantId) };
+        } else if (request.method === "POST" && url.pathname === "/v1/customer/catalog") {
+          if (!requireScope("catalog:write")) return;
+          const body = await readBody(request);
+          const products = request.headers["content-type"]?.includes("text/csv")
+            ? parseProductCsv(body)
+            : JSON.parse(body).products;
+          result = await store.upsertProducts(principal.tenantId, products);
+        } else if (request.method === "POST" && url.pathname === "/v1/customer/assets") {
+          if (!requireScope("assets:write")) return;
+          const body = await readBody(request);
+          const assets = request.headers["content-type"]?.includes("text/csv")
+            ? parseAssetCsv(body)
+            : JSON.parse(body).assets;
+          result = await store.registerAssets(principal.tenantId, assets);
+        } else if (request.method === "GET" && url.pathname === "/v1/customer/inventory") {
+          if (!requireScope("inventory:read")) return;
+          result = await store.summaryFor(principal.tenantId);
+        } else if (request.method === "GET" && url.pathname === "/v1/customer/encoding/batches") {
+          if (!requireScope("encoding:read")) return;
+          result = { batches: await store.encodingBatchesFor(principal.tenantId) };
+        } else if (request.method === "POST" && url.pathname === "/v1/customer/encoding/jobs/claim") {
+          if (!requireScope("encoding:work")) return;
+          result = { job: await store.claimEncodingJob(
+            principal.tenantId,
+            JSON.parse(await readBody(request) || "{}")
+          ) };
+        } else if (request.method === "POST" && url.pathname === "/v1/customer/encoding/jobs/finish") {
+          if (!requireScope("encoding:work")) return;
+          result = await store.finishEncodingJob(
+            principal.tenantId,
+            JSON.parse(await readBody(request) || "{}")
+          );
+        } else {
+          return json(response, 404, { error: "customer_api_route_not_found" });
+        }
+
+        if (mutation) {
+          result = await store.customerApiIdempotencyPut({ ...idempotency, response: result });
+          await store.recordAudit({
+            tenantId: principal.tenantId,
+            actorId: principal.clientId,
+            actorRole: "customer_api",
+            action: `${request.method} ${url.pathname}`,
+            entityType: "api_route",
+            entityId: null,
+            details: { path: url.pathname, idempotencyKey }
+          });
+        }
+        return json(response, 200, result);
+      }
+
       if (url.pathname.startsWith("/v1/admin/")) {
         const principal = await authenticateAdmin(request, admin, store, sessionSecret);
         if (principal.error) return requireAdmin(response, principal.error);
@@ -415,6 +559,12 @@ export function createApp({
             managed: principal.managed,
             userId: principal.userId
           });
+        }
+
+        if (request.method === "GET" && url.pathname === "/v1/admin/standards/profile") {
+          return json(response, 200, gs1UsProfile({
+            companyPrefix: process.env.GS1_COMPANY_PREFIX || null
+          }));
         }
 
         if (request.method === "GET" && url.pathname === "/v1/admin/users") {
@@ -485,6 +635,248 @@ export function createApp({
 
         if (request.method === "GET" && url.pathname === "/v1/admin/catalog") {
           return json(response, 200, { products: await store.productsFor(tenantId) });
+        }
+
+        if (request.method === "GET" && url.pathname === "/v1/admin/encoding/batches") {
+          return json(response, 200, { batches: await store.encodingBatchesFor(tenantId) });
+        }
+
+        if (request.method === "POST" && url.pathname === "/v1/admin/encoding/batches") {
+          if (principal.role !== "chain_admin") {
+            return json(response, 403, { error: "globaltex_admin_required" });
+          }
+          try {
+            return json(response, 201, await store.createEncodingBatch(
+              tenantId,
+              JSON.parse(await readBody(request))
+            ));
+          } catch (error) {
+            return json(response, 422, { error: "invalid_encoding_batch", message: error.message });
+          }
+        }
+
+        const encodingBatch = url.pathname.match(/^\/v1\/admin\/encoding\/batches\/([^/]+)$/);
+        if (request.method === "GET" && encodingBatch) {
+          const batch = await store.encodingBatchFor(tenantId, decodeURIComponent(encodingBatch[1]));
+          return batch
+            ? json(response, 200, batch)
+            : json(response, 404, { error: "encoding_batch_not_found" });
+        }
+
+        if (request.method === "GET" && url.pathname === "/v1/admin/assets") {
+          return json(response, 200, { assets: await store.inventoryFor(tenantId) });
+        }
+
+        if (request.method === "GET" && url.pathname === "/v1/admin/receiving-batches") {
+          return json(response, 200, { batches: await store.receivingBatchesFor(tenantId) });
+        }
+
+        if (request.method === "POST" && url.pathname === "/v1/admin/receiving-batches") {
+          if (principal.role !== "chain_admin") {
+            return json(response, 403, { error: "globaltex_admin_required" });
+          }
+          try {
+            const value = JSON.parse(await readBody(request) || "{}");
+            return json(response, 201, await store.createReceivingBatch({
+              tenantId,
+              sku: value.sku,
+              expectedQuantity: Number(value.expectedQuantity),
+              facilityId: value.facilityId,
+              zoneId: value.zoneId,
+              reference: value.reference || null
+            }));
+          } catch (error) {
+            return json(response, 422, { error: "invalid_receiving_batch", message: error.message });
+          }
+        }
+
+        const receivingScan = url.pathname.match(
+          /^\/v1\/admin\/receiving-batches\/([^/]+)\/scan$/
+        );
+        if (request.method === "POST" && receivingScan) {
+          if (principal.role !== "chain_admin") {
+            return json(response, 403, { error: "globaltex_admin_required" });
+          }
+          try {
+            const value = JSON.parse(await readBody(request) || "{}");
+            const reads = await scanRru9809({
+              port: process.env.RRU9809_PORT ?? "COM4",
+              baudRate: Number(process.env.RRU9809_BAUD_RATE ?? 57600),
+              scanCount: Math.min(Math.max(Number(value.scanCount) || 5, 1), 10)
+            });
+            const epcs = [...new Set(reads.map((read) => read.epc))];
+            const batch = await store.addReceivingBatchReads({
+              tenantId,
+              batchId: decodeURIComponent(receivingScan[1]),
+              epcs
+            });
+            return json(response, 200, { batch, detectedQuantity: epcs.length });
+          } catch (error) {
+            return json(response, 422, { error: "receiving_batch_scan_failed", message: error.message });
+          }
+        }
+
+        const receivingApproval = url.pathname.match(
+          /^\/v1\/admin\/receiving-batches\/([^/]+)\/approve$/
+        );
+        const receivingTag = url.pathname.match(
+          /^\/v1\/admin\/receiving-batches\/([^/]+)\/tags\/([^/]+)$/
+        );
+        if (request.method === "DELETE" && receivingTag) {
+          if (principal.role !== "chain_admin") {
+            return json(response, 403, { error: "globaltex_admin_required" });
+          }
+          try {
+            return json(response, 200, await store.removeReceivingBatchTag({
+              tenantId,
+              batchId: decodeURIComponent(receivingTag[1]),
+              epc: decodeURIComponent(receivingTag[2])
+            }));
+          } catch (error) {
+            return json(response, 422, { error: "receiving_batch_tag_removal_failed", message: error.message });
+          }
+        }
+        if (request.method === "POST" && receivingApproval) {
+          if (principal.role !== "chain_admin") {
+            return json(response, 403, { error: "globaltex_admin_required" });
+          }
+          try {
+            return json(response, 200, await store.approveReceivingBatch({
+              tenantId,
+              batchId: decodeURIComponent(receivingApproval[1]),
+              actorId: principal.actorId
+            }));
+          } catch (error) {
+            return json(response, 422, { error: "receiving_batch_approval_failed", message: error.message });
+          }
+        }
+
+        if (request.method === "POST" && url.pathname === "/v1/admin/hardware/rru9809/scan") {
+          try {
+            const value = JSON.parse(await readBody(request) || "{}");
+            const reads = await scanRru9809({
+              port: process.env.RRU9809_PORT ?? "COM4",
+              baudRate: Number(process.env.RRU9809_BAUD_RATE ?? 57600),
+              scanCount: Math.min(Math.max(Number(value.scanCount) || 1, 1), 10)
+            });
+            let ingestion = null;
+            if (value.facilityId || value.zoneId || value.sessionId) {
+              if (!value.facilityId || !value.zoneId) {
+                throw new Error("facilityId and zoneId must be supplied together");
+              }
+              const reader = (await store.readersFor(tenantId)).find(
+                (item) => item.active && item.adapter === "rru9809usb"
+              );
+              if (!reader) throw new Error("No active RRU9809 reader is assigned to this hotel");
+              ingestion = await store.ingest({
+                tenantId,
+                readerId: reader.readerId,
+                facilityId: value.facilityId,
+                zoneId: value.zoneId,
+                sessionId: value.sessionId,
+                events: reads.map((read) => ({
+                  eventId: randomUUID(),
+                  epc: read.epc,
+                  observedAt: new Date().toISOString(),
+                  antenna: read.antenna ?? 1
+                }))
+              });
+            }
+            return json(response, 200, { reads, ingestion });
+          } catch (error) {
+            return json(response, 422, { error: "rru9809_scan_failed", message: error.message });
+          }
+        }
+
+        if (request.method === "POST" && url.pathname === "/v1/admin/hardware/rru9809/write") {
+          if (principal.role !== "chain_admin") {
+            return json(response, 403, { error: "globaltex_admin_required" });
+          }
+          try {
+            const value = JSON.parse(await readBody(request) || "{}");
+            const epc = value.epc || `475458${randomBytes(9).toString("hex").toUpperCase()}`;
+            return json(response, 200, await writeRru9809Epc({
+              port: process.env.RRU9809_PORT ?? "COM4",
+              baudRate: Number(process.env.RRU9809_BAUD_RATE ?? 57600),
+              epc
+            }));
+          } catch (error) {
+            return json(response, 422, { error: "rru9809_write_failed", message: error.message });
+          }
+        }
+
+        if (request.method === "GET" && url.pathname === "/v1/admin/zoho/catalog") {
+          if (principal.role !== "chain_admin") {
+            return json(response, 200, {
+              connected: false,
+              generatedAt: null,
+              summary: null,
+              products: []
+            });
+          }
+          try {
+            const report = JSON.parse(readFileSync(
+              process.env.ZOHO_MAPPING_REPORT_JSON ?? "data/runtime/zoho-mapping-report.json",
+              "utf8"
+            ));
+            return json(response, 200, {
+              connected: true,
+              generatedAt: report.generatedAt,
+              summary: report.summary,
+              products: report.catalog ?? report.eligible ?? []
+            });
+          } catch {
+            return json(response, 200, {
+              connected: false,
+              generatedAt: null,
+              summary: null,
+              products: []
+            });
+          }
+        }
+
+        if (request.method === "POST" && url.pathname === "/v1/admin/zoho/assets/register") {
+          if (principal.role !== "chain_admin") {
+            return json(response, 403, { error: "globaltex_admin_required" });
+          }
+          try {
+            const value = JSON.parse(await readBody(request));
+            const report = JSON.parse(readFileSync(
+              process.env.ZOHO_MAPPING_REPORT_JSON ?? "data/runtime/zoho-mapping-report.json",
+              "utf8"
+            ));
+            const product = (report.eligible ?? []).find(
+              (item) => item.sku === String(value.sku ?? "").trim()
+            );
+            if (!product) throw new Error("SKU is not in the eligible Zoho catalog");
+            const unitsPerBox = Number(value.unitsPerBox);
+            const boxesPerPallet = Number(value.boxesPerPallet);
+            if (!Number.isInteger(unitsPerBox) || unitsPerBox < 1) {
+              throw new Error("unitsPerBox must be a positive integer");
+            }
+            if (!Number.isInteger(boxesPerPallet) || boxesPerPallet < 1) {
+              throw new Error("boxesPerPallet must be a positive integer");
+            }
+            await store.upsertProducts(tenantId, [{
+              sku: product.sku,
+              name: product.name,
+              category: value.category ?? "Zoho Inventory",
+              unitsPerBox,
+              boxesPerPallet,
+              size: value.size ?? "",
+              color: value.color ?? "",
+              active: true
+            }]);
+            const result = await store.registerAssets(tenantId, [{
+              epc: value.epc,
+              sku: product.sku,
+              tid: value.tid ?? null,
+              encodedAt: new Date().toISOString()
+            }]);
+            return json(response, 200, { ...result, sku: product.sku, name: product.name });
+          } catch (error) {
+            return json(response, 422, { error: "invalid_zoho_asset", message: error.message });
+          }
         }
 
         if (request.method === "GET" && url.pathname === "/v1/admin/audit") {
@@ -746,7 +1138,11 @@ export function createApp({
         if (request.method === "POST" && url.pathname === "/v1/admin/shipments") {
           try {
             const value = JSON.parse(await readBody(request));
-            return json(response, 201, await store.createShipment({ tenantId, ...value }));
+            return json(response, 201, await store.createShipment({
+              tenantId,
+              ...value,
+              actorId: principal.actorId
+            }));
           } catch (error) {
             return json(response, 422, { error: "invalid_shipment", message: error.message });
           }

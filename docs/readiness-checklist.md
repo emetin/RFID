@@ -19,6 +19,10 @@ in [enterprise-roadmap.md](enterprise-roadmap.md).
 - [x] PostgreSQL schema and local container definition
 - [x] Tenant row-level security design
 - [x] Encoding batch and verification data model
+- [x] Atomic closed-system EPC allocator with durable non-reuse
+- [x] Lease-based multi-writer job coordination and expiry recovery
+- [x] Device-neutral automatic write/readback/verify worker
+- [ ] Selected industrial writer SDK adapter and physical throughput qualification
 - [x] Device adapter acceptance contract
 - [x] Automated unit and end-to-end simulation tests
 
@@ -64,6 +68,9 @@ These pending items are integration inputs, not reasons to change the core inven
 - [x] Tenant-scoped raw-read retention preview and bounded purge
 - [ ] Production event-processing infrastructure and managed database deployment
 - [x] Generic signed ERP/PMS/WMS webhook outbox with retry and dead-letter handling
+- [x] Tenant-scoped customer API credentials, scopes and audited mutations
+- [x] Persistent customer API idempotency and rate limiting for SQLite/PostgreSQL
+- [x] Production startup validation, database readiness and HTTPS proxy template
 - [ ] First customer's field mapping, endpoint certification and reconciliation
 - [x] Verified SQLite snapshot, hash manifest and controlled restore runbook
 - [ ] Off-host backup scheduler, restore drill, production PITR, SLO and incident ownership

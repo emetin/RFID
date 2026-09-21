@@ -3,6 +3,7 @@ import { calculatePackaging } from "./packaging.js";
 import { gatewayStatus } from "./gateway-health.js";
 import { movementDecision } from "./movement-policy.js";
 import { ASSET_STATUSES, validateAssetTransition } from "./asset-lifecycle.js";
+import { commissioningEvent, receivingEvent, shippingEvent } from "../standards/epcis.js";
 
 export class InventoryStore {
   #seenEvents = new Set();
@@ -25,6 +26,17 @@ export class InventoryStore {
   #exceptions = new Map();
   #assetLifecycleHistory = [];
   #adminUsers = new Map();
+  #customerApiIdempotency = new Map();
+  #customerApiRateLimits = new Map();
+  #encodingBatches = new Map();
+  #encodingJobs = new Map();
+  #receivingBatches = new Map();
+  #receivingBatchTags = new Map();
+  #nextEpcSerial = 1n;
+
+  readinessCheck() {
+    return { status: "ready", store: "memory" };
+  }
 
   createAdminUser({
     userId = randomUUID(),
@@ -290,13 +302,161 @@ export class InventoryStore {
     return { registered, unchanged };
   }
 
+  createReceivingBatch({
+    tenantId,
+    sku,
+    expectedQuantity,
+    facilityId,
+    zoneId,
+    reference = null,
+    batchId = randomUUID(),
+    createdAt = new Date().toISOString()
+  }) {
+    if (!this.#products.has(`${tenantId}:${sku}`)) throw new Error(`Unknown SKU: ${sku}`);
+    if (!Number.isInteger(expectedQuantity) || expectedQuantity < 1) {
+      throw new Error("Expected quantity must be a positive integer");
+    }
+    const location = this.validateLocation({ tenantId, facilityId, zoneId, required: true });
+    if (!location.valid) throw new Error(`Invalid receiving location: ${location.reason}`);
+    if (this.#receivingBatches.has(batchId)) throw new Error("Receiving batch already exists");
+    const batch = {
+      batchId,
+      tenantId,
+      sku,
+      expectedQuantity,
+      facilityId,
+      zoneId,
+      reference,
+      status: "draft",
+      createdAt,
+      approvedAt: null,
+      approvedBy: null
+    };
+    this.#receivingBatches.set(batchId, batch);
+    this.#receivingBatchTags.set(batchId, new Map());
+    return this.receivingBatchFor(tenantId, batchId);
+  }
+
+  receivingBatchesFor(tenantId) {
+    return [...this.#receivingBatches.values()]
+      .filter((batch) => batch.tenantId === tenantId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map((batch) => this.receivingBatchFor(tenantId, batch.batchId));
+  }
+
+  receivingBatchFor(tenantId, batchId) {
+    const batch = this.#receivingBatches.get(batchId);
+    if (!batch || batch.tenantId !== tenantId) throw new Error("Unknown receiving batch");
+    const tags = [...(this.#receivingBatchTags.get(batchId)?.values() ?? [])]
+      .sort((a, b) => a.epc.localeCompare(b.epc));
+    const conflicts = tags.filter((tag) =>
+      [...this.#assets.values()].some((asset) => asset.epc === tag.epc)
+    ).map((tag) => tag.epc);
+    return {
+      ...batch,
+      tags,
+      scannedQuantity: tags.length,
+      remainingQuantity: Math.max(batch.expectedQuantity - tags.length, 0),
+      overageQuantity: Math.max(tags.length - batch.expectedQuantity, 0),
+      conflictEpcs: conflicts,
+      canApprove: batch.status === "draft" &&
+        tags.length === batch.expectedQuantity && conflicts.length === 0
+    };
+  }
+
+  addReceivingBatchReads({
+    tenantId,
+    batchId,
+    epcs,
+    observedAt = new Date().toISOString()
+  }) {
+    const batch = this.#receivingBatches.get(batchId);
+    if (!batch || batch.tenantId !== tenantId) throw new Error("Unknown receiving batch");
+    if (batch.status !== "draft") throw new Error("Receiving batch is not open");
+    const tags = this.#receivingBatchTags.get(batchId);
+    for (const value of epcs) {
+      const epc = String(value ?? "").toUpperCase();
+      if (!/^[0-9A-F]{8,96}$/.test(epc)) throw new Error(`Invalid EPC: ${epc}`);
+      const existing = tags.get(epc);
+      tags.set(epc, existing
+        ? { ...existing, lastSeenAt: observedAt, readCount: existing.readCount + 1 }
+        : { epc, firstSeenAt: observedAt, lastSeenAt: observedAt, readCount: 1 });
+    }
+    return this.receivingBatchFor(tenantId, batchId);
+  }
+
+  removeReceivingBatchTag({ tenantId, batchId, epc }) {
+    const batch = this.#receivingBatches.get(batchId);
+    if (!batch || batch.tenantId !== tenantId) throw new Error("Unknown receiving batch");
+    if (batch.status !== "draft") throw new Error("Receiving batch is not open");
+    this.#receivingBatchTags.get(batchId).delete(String(epc).toUpperCase());
+    return this.receivingBatchFor(tenantId, batchId);
+  }
+
+  approveReceivingBatch({ tenantId, batchId, actorId, approvedAt = new Date().toISOString() }) {
+    const detail = this.receivingBatchFor(tenantId, batchId);
+    if (detail.status !== "draft") throw new Error("Receiving batch is not open");
+    if (!detail.canApprove) {
+      throw new Error("Expected quantity, scanned tags and EPC conflicts must reconcile before approval");
+    }
+    this.registerAssets(tenantId, detail.tags.map((tag) => ({
+      epc: tag.epc,
+      sku: detail.sku,
+      status: "active",
+      encodedAt: approvedAt
+    })));
+    for (const tag of detail.tags) {
+      this.#inventory.set(`${tenantId}:${tag.epc}`, {
+        tenantId,
+        epc: tag.epc,
+        facilityId: detail.facilityId,
+        zoneId: detail.zoneId,
+        readerId: `receiving-batch:${batchId}`,
+        sessionId: null,
+        firstSeenAt: tag.firstSeenAt,
+        lastSeenAt: tag.lastSeenAt,
+        readCount: tag.readCount,
+        lastRssi: null,
+        lastAntenna: null
+      });
+      const custody = this.#custodyHistory.find((entry) =>
+        entry.epc === tag.epc && entry.tenantId === tenantId && entry.validTo == null
+      );
+      if (custody) custody.facilityId = detail.facilityId;
+    }
+    const batch = this.#receivingBatches.get(batchId);
+    batch.status = "approved";
+    batch.approvedAt = approvedAt;
+    batch.approvedBy = actorId;
+    this.recordAudit({
+      tenantId,
+      actorId,
+      actorRole: "chain_admin",
+      action: "receiving_batch.approved",
+      entityType: "receiving_batch",
+      entityId: batchId,
+      details: {
+        sku: detail.sku,
+        quantity: detail.scannedQuantity,
+        epcis: commissioningEvent({
+          epcs: detail.tags.map((tag) => tag.epc),
+          eventTime: approvedAt,
+          businessLocation: detail.facilityId
+        })
+      },
+      createdAt: approvedAt
+    });
+    return this.receivingBatchFor(tenantId, batchId);
+  }
+
   createShipment({
     tenantId,
     customerTenantId,
     destinationFacilityId,
     reference = null,
     epcs,
-    shipmentId = randomUUID()
+    shipmentId = randomUUID(),
+    actorId = "system"
   }) {
     if (!customerTenantId || customerTenantId === tenantId) {
       throw new Error("A different customerTenantId is required");
@@ -324,6 +484,26 @@ export class InventoryStore {
       assets
     };
     this.#shipments.set(shipmentId, shipment);
+    this.recordAudit({
+      tenantId,
+      actorId,
+      actorRole: "chain_admin",
+      action: "shipment.shipping",
+      entityType: "shipment",
+      entityId: shipmentId,
+      details: {
+        reference,
+        quantity: normalized.length,
+        epcis: shippingEvent({
+          epcs: normalized,
+          eventTime: shipment.createdAt,
+          source: tenantId,
+          destination: customerTenantId,
+          transaction: reference
+        })
+      },
+      createdAt: shipment.createdAt
+    });
     return this.#publicShipment(shipment);
   }
 
@@ -350,8 +530,10 @@ export class InventoryStore {
     const missing = [...expected].filter((epc) => !scanned.has(epc));
     const unexpected = [...scanned].filter((epc) => !expected.has(epc));
 
+    let acceptanceTime = null;
     if (accept) {
       const acceptedAt = new Date().toISOString();
+      acceptanceTime = acceptedAt;
       for (const epc of received) {
         const manifestAsset = shipment.assets.find((asset) => asset.epc === epc);
         if (manifestAsset.acceptedAt) continue;
@@ -441,6 +623,28 @@ export class InventoryStore {
           details: { destinationFacilityId: shipment.destinationFacilityId }
         });
       }
+      this.recordAudit({
+        tenantId,
+        actorId: "shipment_acceptance",
+        actorRole: "hotel_admin",
+        action: "shipment.receiving",
+        entityType: "shipment",
+        entityId: shipmentId,
+        details: {
+          quantity: received.length,
+          missing: missing.length,
+          unexpected: unexpected.length,
+          ...(received.length ? { epcis: receivingEvent({
+            epcs: received,
+            eventTime: acceptanceTime,
+            businessLocation: shipment.destinationFacilityId,
+            source: shipment.supplierTenantId,
+            destination: tenantId,
+            transaction: shipment.reference
+          }) } : {})
+        },
+        createdAt: acceptanceTime
+      });
     }
 
     return {
@@ -1263,6 +1467,136 @@ export class InventoryStore {
       availableUnits: statusCounts.active,
       statusCounts,
       lines
+    };
+  }
+
+  consumeCustomerApiRateLimit(clientId, windowStart, limit) {
+    const key = `${clientId}:${windowStart}`;
+    const count = (this.#customerApiRateLimits.get(key) ?? 0) + 1;
+    this.#customerApiRateLimits.set(key, count);
+    return { allowed: count <= limit, count };
+  }
+
+  customerApiIdempotencyGet({ tenantId, clientId, method, path, idempotencyKey }) {
+    return this.#customerApiIdempotency.get(
+      `${tenantId}:${clientId}:${method}:${path}:${idempotencyKey}`
+    ) ?? null;
+  }
+
+  customerApiIdempotencyPut({ tenantId, clientId, method, path, idempotencyKey, response }) {
+    const key = `${tenantId}:${clientId}:${method}:${path}:${idempotencyKey}`;
+    if (!this.#customerApiIdempotency.has(key)) this.#customerApiIdempotency.set(key, response);
+    return this.#customerApiIdempotency.get(key);
+  }
+
+  createEncodingBatch(tenantId, {
+    sku, requestedQuantity, epcScheme = "GTX96",
+    batchId = randomUUID(), createdAt = new Date().toISOString()
+  }) {
+    const quantity = Number(requestedQuantity);
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100_000) {
+      throw new Error("requestedQuantity must be an integer between 1 and 100000");
+    }
+    if (!this.#products.has(`${tenantId}:${sku}`)) throw new Error("Unknown or inactive SKU");
+    if (epcScheme !== "GTX96") throw new Error("Unsupported EPC scheme");
+    this.#encodingBatches.set(`${tenantId}:${batchId}`, {
+      batchId, tenantId, sku, requestedQuantity: quantity, epcScheme,
+      status: "planned", createdAt, startedAt: null, completedAt: null
+    });
+    for (let sequenceNumber = 1; sequenceNumber <= quantity; sequenceNumber += 1) {
+      this.#createEncodingJob({ tenantId, batchId, sequenceNumber, now: createdAt });
+    }
+    return this.#publicEncodingBatch(tenantId, batchId);
+  }
+
+  encodingBatchesFor(tenantId, { limit = 100 } = {}) {
+    return [...this.#encodingBatches.values()].filter((batch) => batch.tenantId === tenantId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, Math.min(Math.max(Number(limit) || 100, 1), 500))
+      .map((batch) => this.#publicEncodingBatch(tenantId, batch.batchId));
+  }
+
+  encodingBatchFor(tenantId, batchId) {
+    return this.#publicEncodingBatch(tenantId, batchId);
+  }
+
+  claimEncodingJob(tenantId, { stationId, leaseSeconds = 60, now = new Date().toISOString() }) {
+    if (!stationId) throw new Error("stationId is required");
+    for (const job of this.#encodingJobs.values()) {
+      if (job.tenantId === tenantId && job.status === "leased" && job.leaseUntil <= now) {
+        Object.assign(job, { status: "queued", stationId: null, leaseToken: null, leaseUntil: null, updatedAt: now });
+      }
+    }
+    const job = [...this.#encodingJobs.values()]
+      .filter((item) => item.tenantId === tenantId && item.status === "queued")
+      .sort((a, b) => a.batchId.localeCompare(b.batchId) || a.sequenceNumber - b.sequenceNumber)[0];
+    if (!job) return null;
+    const leaseToken = randomUUID();
+    const leaseUntil = new Date(Date.parse(now) + Math.min(Math.max(Number(leaseSeconds) || 60, 15), 600) * 1000).toISOString();
+    Object.assign(job, { status: "leased", stationId, leaseToken, leaseUntil, attempts: job.attempts + 1, updatedAt: now });
+    const batch = this.#encodingBatches.get(`${tenantId}:${job.batchId}`);
+    if (batch.status === "planned") Object.assign(batch, { status: "encoding", startedAt: now });
+    return { ...job };
+  }
+
+  finishEncodingJob(tenantId, {
+    jobId, stationId, leaseToken, observedEpc = null, tid = null,
+    previousEpc = null, errorCode = null, errorMessage = null,
+    now = new Date().toISOString()
+  }) {
+    const job = this.#encodingJobs.get(jobId);
+    if (!job || job.tenantId !== tenantId) throw new Error("Unknown encoding job");
+    if (job.status !== "leased" || job.stationId !== stationId || job.leaseToken !== leaseToken) {
+      throw new Error("Encoding job lease is not owned by this station");
+    }
+    if (job.leaseUntil <= now) throw new Error("Encoding job lease expired");
+    const verified = !errorCode && observedEpc === job.epc;
+    Object.assign(job, {
+      status: verified ? "verified" : "failed", previousEpc, tid,
+      errorCode: verified ? null : (errorCode || "readback_mismatch"),
+      errorMessage: verified ? null : (errorMessage || "Observed EPC does not match allocation"),
+      writtenAt: now, verifiedAt: verified ? now : null,
+      leaseToken: null, leaseUntil: null, updatedAt: now
+    });
+    const batch = this.#encodingBatches.get(`${tenantId}:${job.batchId}`);
+    if (verified) {
+      this.registerAssets(tenantId, [{ epc: job.epc, sku: batch.sku, tid, encodedAt: now }]);
+    } else {
+      const nextSequence = Math.max(...[...this.#encodingJobs.values()]
+        .filter((item) => item.batchId === job.batchId).map((item) => item.sequenceNumber)) + 1;
+      this.#createEncodingJob({ tenantId, batchId: job.batchId, sequenceNumber: nextSequence, now });
+    }
+    const summary = this.#publicEncodingBatch(tenantId, job.batchId);
+    if (summary.verified >= batch.requestedQuantity) {
+      Object.assign(batch, { status: "completed", completedAt: now });
+    }
+    return { verified, job: { ...job }, batch: this.#publicEncodingBatch(tenantId, job.batchId) };
+  }
+
+  #createEncodingJob({ tenantId, batchId, sequenceNumber, now }) {
+    const jobId = randomUUID();
+    const epc = `475458${this.#nextEpcSerial.toString(16).toUpperCase().padStart(18, "0")}`;
+    this.#nextEpcSerial += 1n;
+    this.#encodingJobs.set(jobId, {
+      jobId, batchId, tenantId, sequenceNumber, epc, status: "queued",
+      stationId: null, leaseToken: null, leaseUntil: null, attempts: 0,
+      previousEpc: null, tid: null, errorCode: null, errorMessage: null,
+      writtenAt: null, verifiedAt: null, updatedAt: now
+    });
+    return this.#encodingJobs.get(jobId);
+  }
+
+  #publicEncodingBatch(tenantId, batchId) {
+    const batch = this.#encodingBatches.get(`${tenantId}:${batchId}`);
+    if (!batch) return null;
+    const jobs = [...this.#encodingJobs.values()].filter((job) => job.batchId === batchId);
+    return {
+      ...batch,
+      queued: jobs.filter((job) => job.status === "queued").length,
+      leased: jobs.filter((job) => job.status === "leased").length,
+      verified: jobs.filter((job) => job.status === "verified").length,
+      failed: jobs.filter((job) => job.status === "failed").length,
+      totalJobs: jobs.length
     };
   }
 

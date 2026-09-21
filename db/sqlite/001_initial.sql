@@ -16,6 +16,49 @@ CREATE TABLE IF NOT EXISTS products (
   PRIMARY KEY (tenant_id, sku)
 );
 
+CREATE TABLE IF NOT EXISTS epc_allocator (
+  namespace TEXT PRIMARY KEY,
+  next_serial TEXT NOT NULL
+);
+INSERT OR IGNORE INTO epc_allocator (namespace, next_serial) VALUES ('GTX96', '1');
+
+CREATE TABLE IF NOT EXISTS encoding_batches (
+  batch_id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  sku TEXT NOT NULL,
+  requested_quantity INTEGER NOT NULL CHECK (requested_quantity > 0),
+  epc_scheme TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('planned','encoding','completed','cancelled')),
+  created_at TEXT NOT NULL,
+  started_at TEXT,
+  completed_at TEXT,
+  FOREIGN KEY (tenant_id, sku) REFERENCES products (tenant_id, sku)
+);
+
+CREATE TABLE IF NOT EXISTS encoding_jobs (
+  job_id TEXT PRIMARY KEY,
+  batch_id TEXT NOT NULL,
+  tenant_id TEXT NOT NULL,
+  sequence_number INTEGER NOT NULL,
+  epc TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL CHECK (status IN ('queued','leased','verified','failed')),
+  station_id TEXT,
+  lease_token TEXT,
+  lease_until TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  previous_epc TEXT,
+  tid TEXT,
+  error_code TEXT,
+  error_message TEXT,
+  written_at TEXT,
+  verified_at TEXT,
+  updated_at TEXT NOT NULL,
+  UNIQUE (batch_id, sequence_number),
+  FOREIGN KEY (batch_id) REFERENCES encoding_batches (batch_id)
+);
+CREATE INDEX IF NOT EXISTS encoding_jobs_claim_idx
+  ON encoding_jobs (tenant_id, status, lease_until, batch_id, sequence_number);
+
 CREATE TABLE IF NOT EXISTS admin_users (
   user_id TEXT PRIMARY KEY,
   username TEXT NOT NULL UNIQUE,
@@ -176,6 +219,36 @@ CREATE TABLE IF NOT EXISTS session_epcs (
     REFERENCES scan_sessions (tenant_id, session_id)
 );
 
+CREATE TABLE IF NOT EXISTS receiving_batches (
+  batch_id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  sku TEXT NOT NULL,
+  expected_quantity INTEGER NOT NULL CHECK (expected_quantity > 0),
+  facility_id TEXT NOT NULL,
+  zone_id TEXT NOT NULL,
+  reference TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','approved','cancelled')),
+  created_at TEXT NOT NULL,
+  approved_at TEXT,
+  approved_by TEXT,
+  FOREIGN KEY (tenant_id, sku) REFERENCES products (tenant_id, sku),
+  FOREIGN KEY (tenant_id, facility_id) REFERENCES facilities (tenant_id, facility_id),
+  FOREIGN KEY (tenant_id, zone_id) REFERENCES zones (tenant_id, zone_id)
+);
+
+CREATE TABLE IF NOT EXISTS receiving_batch_tags (
+  batch_id TEXT NOT NULL,
+  epc TEXT NOT NULL,
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  read_count INTEGER NOT NULL DEFAULT 1,
+  PRIMARY KEY (batch_id, epc),
+  FOREIGN KEY (batch_id) REFERENCES receiving_batches (batch_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS receiving_batches_tenant_created_idx
+  ON receiving_batches (tenant_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS read_events (
   tenant_id TEXT NOT NULL,
   event_id TEXT NOT NULL,
@@ -257,6 +330,24 @@ CREATE TABLE IF NOT EXISTS audit_events (
   entity_id TEXT,
   details_json TEXT NOT NULL,
   created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS customer_api_idempotency (
+  tenant_id TEXT NOT NULL,
+  client_id TEXT NOT NULL,
+  method TEXT NOT NULL,
+  path TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  response_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, client_id, method, path, idempotency_key)
+);
+
+CREATE TABLE IF NOT EXISTS customer_api_rate_limits (
+  client_id TEXT NOT NULL,
+  window_start INTEGER NOT NULL,
+  request_count INTEGER NOT NULL,
+  PRIMARY KEY (client_id, window_start)
 );
 
 CREATE TABLE IF NOT EXISTS integration_outbox (

@@ -1,0 +1,75 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: globaltex_rfid
+      POSTGRES_USER: globaltex
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - production_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U globaltex -d globaltex_rfid"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    build: .
+    command: ["node", "src/ops/postgres-cli.js", "migrate"]
+    environment:
+      DATABASE_URL: postgresql://globaltex:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/globaltex_rfid
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build: .
+    environment:
+      NODE_ENV: production
+      DATA_STORE: postgres
+      DATABASE_URL: postgresql://globaltex:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/globaltex_rfid
+      PORT: 8080
+      PUBLIC_BASE_URL: https://${DOMAIN:?DOMAIN is required}
+      DEVICE_CREDENTIALS: ${DEVICE_CREDENTIALS:?DEVICE_CREDENTIALS is required}
+      ADMIN_IDENTITIES: ${ADMIN_IDENTITIES:?ADMIN_IDENTITIES is required}
+      CUSTOMER_API_CREDENTIALS: ${CUSTOMER_API_CREDENTIALS:-{}}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
+      COOKIE_SECURE: "true"
+      PGPOOL_MAX: ${PGPOOL_MAX:-20}
+      PGPOOL_IDLE_MS: ${PGPOOL_IDLE_MS:-30000}
+      PGCONNECT_TIMEOUT_MS: ${PGCONNECT_TIMEOUT_MS:-10000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN is required}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  production_postgres:
+  caddy_data:
+  caddy_config:
