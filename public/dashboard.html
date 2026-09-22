@@ -8,15 +8,16 @@
     :root {
       color-scheme: light;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      --ink: #17211d;
-      --muted: #66746d;
-      --line: #e3e9e5;
+      --ink: #262218;
+      --muted: #746e60;
+      --line: #e8e1cf;
       --surface: #ffffff;
-      --canvas: #f3f6f4;
-      --green-950: #0d3026;
-      --green-800: #174c3a;
-      --green-600: #23805e;
-      --green-100: #dff3e9;
+      --canvas: #f5f3ed;
+      --green-950: #282419;
+      --green-800: #9d8123;
+      --green-600: #b99a32;
+      --green-100: #f5edcf;
+      --brand: #D8BC55;
       --amber: #c57918;
       --red: #b63d3d;
       --blue: #326ca8;
@@ -34,45 +35,43 @@
     .sidebar {
       position: fixed;
       inset: 0 auto 0 0;
-      width: 218px;
-      padding: 20px 14px;
+      width: 232px;
+      padding: 22px 16px;
       color: #fff;
-      background:
-        radial-gradient(circle at 20% 10%, rgb(68 154 117 / 34%), transparent 32%),
-        linear-gradient(180deg, #10382b, #0b2a22);
+      background: #1d1b15;
       display: flex;
       flex-direction: column;
       z-index: 10;
     }
-    .brand { display: flex; align-items: center; justify-content: center; min-height: 58px; padding: 0 7px 22px; }
+    .brand { display: flex; align-items: center; justify-content: center; min-height: 96px; padding: 0 7px 24px; border-bottom: 1px solid rgb(216 188 85 / 16%); margin-bottom: 14px; }
     .brand-logo {
-      display: block; width: 176px; height: auto; object-fit: contain;
-      filter: drop-shadow(0 7px 14px rgb(0 0 0 / 18%));
+      display: block; width: 128px; height: 112px; object-fit: contain;
     }
     nav { display: grid; gap: 5px; }
     nav a {
-      color: #bad0c7; text-decoration: none; padding: 9px 10px;
-      border-radius: 8px; font-size: 11px; font-weight: 600; transition: .16s ease;
+      color: #c9c1ad; text-decoration: none; padding: 11px 12px;
+      border-radius: 8px; font-size: 12px; font-weight: 650; transition: .16s ease;
     }
-    nav a:hover, nav a.active { color: #fff; background: rgb(255 255 255 / 9%); }
+    nav a:hover { color: #fff; background: #2b281f; }
+    nav a.active { color: #1d1b15; background: var(--brand); font-weight: 800; }
     .nav-more summary {
-      list-style: none; color: #bad0c7; padding: 9px 10px; border-radius: 8px;
-      font-size: 11px; font-weight: 600; cursor: pointer;
+      list-style: none; color: #c9c1ad; padding: 11px 12px; border-radius: 8px;
+      font-size: 12px; font-weight: 650; cursor: pointer;
     }
     .nav-more summary::-webkit-details-marker { display: none; }
     .nav-more summary::after { content: "+"; float: right; }
     .nav-more[open] summary::after { content: "âˆ’"; }
-    .nav-more summary:hover, .nav-more[open] summary { color: #fff; background: rgb(255 255 255 / 9%); }
+    .nav-more summary:hover, .nav-more[open] summary { color: #fff; background: #2b281f; }
     .nav-more div { display: grid; gap: 4px; padding: 4px 0 0 9px; }
     .sidebar-foot {
-      margin-top: auto; padding: 16px 12px 4px; color: #91aea2;
+      margin-top: auto; padding: 16px 12px 4px; color: #aaa28e;
       border-top: 1px solid rgb(255 255 255 / 10%); font-size: 9px; line-height: 1.6;
     }
-    .workspace { margin-left: 218px; min-width: 0; }
+    .workspace { margin-left: 232px; min-width: 0; }
     .topbar {
-      min-height: 58px; padding: 9px clamp(18px, 3vw, 34px);
+      min-height: 66px; padding: 11px clamp(20px, 3vw, 38px);
       display: flex; align-items: center; justify-content: space-between; gap: 20px;
-      background: rgb(255 255 255 / 88%); border-bottom: 1px solid var(--line);
+      background: rgb(255 255 255 / 90%); border-bottom: 1px solid var(--line);
       backdrop-filter: blur(16px); position: sticky; top: 0; z-index: 8;
     }
     .language-select {
@@ -88,61 +87,59 @@
       cursor: pointer;
     }
     .context { display: flex; align-items: center; gap: 12px; min-width: 0; }
-    .context-dot { width: 9px; height: 9px; border-radius: 50%; background: #2eb67d; box-shadow: 0 0 0 5px #dff5ea; }
-    .context strong { display: block; font-size: 11px; }
-    .context small { display: block; color: var(--muted); margin-top: 1px; font-size: 9px; }
+    .context-dot { width: 9px; height: 9px; border-radius: 50%; background: #25865f; }
+    .context strong { display: block; font-size: 12px; }
+    .context small { display: block; color: var(--muted); margin-top: 2px; font-size: 10px; }
     .toolbar { display: flex; align-items: center; gap: 10px; }
     select, .button {
-      min-height: 32px; border: 1px solid #d7e0db; border-radius: 8px;
-      background: #fff; color: var(--ink); padding: 0 9px; font-size: 10px;
+      min-height: 38px; border: 1px solid var(--line); border-radius: 8px;
+      background: #fff; color: var(--ink); padding: 0 12px; font-size: 11px;
     }
     select { max-width: 210px; }
     .button {
       display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-      cursor: pointer; font-weight: 750; border-color: var(--green-800); color: #fff;
-      background: linear-gradient(135deg, var(--green-800), var(--green-600));
-      box-shadow: 0 7px 16px rgb(23 76 58 / 16%); transition: .16s ease;
+      cursor: pointer; font-weight: 800; border-color: var(--brand); color: #211d12;
+      background: var(--brand); transition: background-color .16s ease, border-color .16s ease;
     }
-    .button:hover { border-color: var(--green-600); background: linear-gradient(135deg, #123d30, #1d7455); transform: translateY(-1px); }
-    .button:active { transform: translateY(0); box-shadow: 0 3px 9px rgb(23 76 58 / 14%); }
-    .button:focus-visible { outline: 3px solid rgb(35 128 94 / 20%); outline-offset: 2px; }
-    .button.danger { color: #a22e2e; border-color: #efcaca; background: #fff; box-shadow: none; }
+    .button:hover { border-color: #c5a63b; background: #c5a63b; }
+    .button:active { background: #b6962e; }
+    .button:focus-visible { outline: 3px solid rgb(216 188 85 / 28%); outline-offset: 2px; }
+    .button.danger { color: #9b3232; border-color: #dfbcbc; background: #fff; }
     .button.danger:hover { background: #fff5f5; border-color: #d99b9b; }
-    .button:disabled { cursor: not-allowed; opacity: .5; transform: none; box-shadow: none; }
-    main { padding: 22px clamp(18px, 3vw, 34px) 44px; }
+    .button:disabled { cursor: not-allowed; opacity: .5; }
+    main { padding: 30px clamp(20px, 3vw, 38px) 52px; }
     .hero {
       display: flex; justify-content: space-between; align-items: flex-end; gap: 24px;
       margin-bottom: 18px;
     }
-    .eyebrow { color: var(--green-600); font-size: 9px; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
-    h1 { margin: 5px 0; font-size: clamp(22px, 3vw, 30px); line-height: 1.1; letter-spacing: -.03em; }
-    .hero p { margin: 0; color: var(--muted); max-width: 690px; line-height: 1.5; font-size: 11px; }
+    .eyebrow { color: var(--green-600); font-size: 10px; font-weight: 850; letter-spacing: .13em; text-transform: uppercase; }
+    h1 { margin: 7px 0; font-size: clamp(26px, 3vw, 34px); line-height: 1.1; letter-spacing: -.03em; }
+    .hero p { margin: 0; color: var(--muted); max-width: 720px; line-height: 1.55; font-size: 12px; }
     .role-chip {
       display: inline-flex; align-items: center; gap: 7px; padding: 8px 11px;
       border-radius: 999px; background: var(--green-100); color: var(--green-800);
-      font-size: 9px; font-weight: 800; white-space: nowrap;
+      font-size: 10px; font-weight: 800; white-space: nowrap;
     }
     .kpis { display: grid; grid-template-columns: repeat(6, minmax(112px, 1fr)); gap: 10px; margin-bottom: 14px; }
     .kpi, .panel {
       background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
-      box-shadow: 0 10px 32px rgb(29 57 45 / 5%);
     }
-    .kpi { padding: 13px; position: relative; overflow: hidden; }
+    .kpi { padding: 17px; position: relative; overflow: hidden; }
     .kpi::after {
       content: ""; position: absolute; width: 72px; height: 72px; border-radius: 50%;
       right: -34px; top: -34px; background: var(--tint, #e7f2ed);
     }
-    .kpi-label { color: var(--muted); font-size: 8px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
-    .kpi-value { margin-top: 8px; font-size: 23px; font-weight: 780; letter-spacing: -.04em; }
-    .kpi-note { margin-top: 3px; min-height: 12px; color: #819089; font-size: 8px; }
+    .kpi-label { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+    .kpi-value { margin-top: 10px; font-size: 27px; font-weight: 780; letter-spacing: -.04em; }
+    .kpi-note { margin-top: 4px; min-height: 14px; color: #817b6d; font-size: 9px; }
     .layout { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(280px, .85fr); gap: 14px; margin-bottom: 14px; }
     .panel { overflow: hidden; min-width: 0; }
     .panel-head {
-      padding: 13px 15px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 16px 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
       border-bottom: 1px solid var(--line);
     }
-    .panel-head h2 { margin: 0; font-size: 12px; letter-spacing: -.01em; }
-    .panel-head span { color: var(--muted); font-size: 9px; }
+    .panel-head h2 { margin: 0; font-size: 14px; letter-spacing: -.01em; }
+    .panel-head span { color: var(--muted); font-size: 10px; }
     .status-list { padding: 5px 15px 13px; }
     .status-row { display: grid; grid-template-columns: 90px 1fr 36px; gap: 9px; align-items: center; padding-top: 10px; }
     .status-row span { color: var(--muted); font-size: 9px; text-transform: capitalize; }
@@ -151,15 +148,15 @@
     .status-row strong { text-align: right; font-size: 12px; }
     .chain-card {
       margin: 16px 20px 20px; padding: 18px; border-radius: 14px;
-      color: #fff; background: linear-gradient(135deg, #154b39, #237858);
+      color: #fff; background: #282419;
     }
     .chain-card small { color: #c9e4d8; }
     .chain-card strong { display: block; margin-top: 7px; font-size: 27px; }
     .chain-card p { margin: 6px 0 0; color: #d8ebe3; font-size: 12px; }
     .table-wrap { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 10px 15px; text-align: left; border-bottom: 1px solid #edf1ee; white-space: nowrap; font-size: 10px; }
-    th { color: #718079; background: #fafcfb; font-size: 8px; text-transform: uppercase; letter-spacing: .07em; }
+    th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #eee9dc; white-space: nowrap; font-size: 11px; }
+    th { color: #746d5d; background: #faf9f5; font-size: 9px; text-transform: uppercase; letter-spacing: .07em; }
     tbody tr:last-child td { border-bottom: 0; }
     tbody tr:hover td { background: #fbfdfc; }
     .inventory-responsive { overflow-x: visible; }
@@ -185,9 +182,9 @@
     .stack { display: grid; gap: 20px; }
     .footer-note { margin-top: 24px; color: #839088; font-size: 11px; text-align: right; }
     .user-form { padding: 14px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; border-bottom: 1px solid var(--line); background: #fbfcfb; }
-    .user-form label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
-    .user-form input, .user-form select { width: 100%; height: 34px; border: 1px solid #d7e0db; border-radius: 8px; padding: 0 9px; background: #fff; font-size: 10px; }
-    .user-form input:focus, .user-form select:focus { border-color: #6fae94; outline: 3px solid rgb(35 128 94 / 10%); }
+    .user-form label { display: block; margin-bottom: 7px; color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; }
+    .user-form input, .user-form select { width: 100%; height: 40px; border: 1px solid var(--line); border-radius: 8px; padding: 0 11px; background: #fff; font-size: 11px; }
+    .user-form input:focus, .user-form select:focus { border-color: var(--brand); outline: 2px solid rgb(216 188 85 / 20%); }
     .user-form input[type="file"] { height: 42px; padding: 5px; color: var(--muted); cursor: pointer; border-style: dashed; background: #f8fbf9; }
     .user-form input[type="file"]::file-selector-button { height: 30px; margin-right: 10px; padding: 0 13px; border: 0; border-radius: 7px; color: var(--green-800); background: var(--green-100); font-weight: 800; cursor: pointer; }
     .user-form input[type="file"]::file-selector-button:hover { background: #ccebdc; }
@@ -202,10 +199,10 @@
     .form-message { grid-column: 1 / -1; min-height: 16px; color: var(--red); font-size: 11px; }
     .form-message.success { color: var(--green-600); }
     .workflow-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 14px; }
-    .workflow-step { padding: 14px; border: 1px solid var(--line); border-radius: 11px; color: var(--ink); background: #fff; text-decoration: none; transition: .16s ease; }
-    .workflow-step:hover { border-color: #8ebda9; transform: translateY(-1px); box-shadow: 0 8px 18px rgb(23 76 58 / 8%); }
-    .workflow-step strong { display: block; margin-bottom: 5px; font-size: 11px; }
-    .workflow-step p { margin: 0; color: var(--muted); font-size: 9px; line-height: 1.55; }
+    .workflow-step { padding: 17px; border: 1px solid var(--line); border-radius: 11px; color: var(--ink); background: #fff; text-decoration: none; transition: .16s ease; }
+    .workflow-step:hover { border-color: var(--brand); background: #fdfbf5; }
+    .workflow-step strong { display: block; margin-bottom: 6px; font-size: 12px; }
+    .workflow-step p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.55; }
     .standard-note { margin: 0 0 14px; padding: 10px 13px; border: 1px solid #cfe3d9; border-radius: 10px; color: var(--green-800); background: #eef7f2; font-size: 10px; }
     .asset-picker { grid-column: 1 / -1; max-height: 220px; overflow: auto; padding: 10px; border: 1px solid #d7e0db; border-radius: 8px; background: #fff; }
     .asset-option { display: grid !important; grid-template-columns: 18px 1fr auto; gap: 8px; align-items: center; margin: 0 !important; padding: 8px 4px; border-bottom: 1px solid #edf1ee; text-transform: none !important; letter-spacing: 0 !important; }
@@ -219,6 +216,16 @@
     .mode-safe { border-left: 4px solid var(--green-600); }
     .mode-write { border-left: 4px solid var(--amber); }
     .mode-note { padding: 11px 14px; background: #fff8ea; color: #80520f; border-bottom: 1px solid #f1dfbd; font-size: 10px; line-height: 1.55; }
+    .hardware-readiness { margin-bottom: 14px; }
+    .hardware-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 10px; align-items: stretch; padding: 14px; }
+    .hardware-item { padding: 13px; border: 1px solid var(--line); border-radius: 10px; background: #faf9f5; }
+    .hardware-item span { display: block; margin-bottom: 6px; color: var(--muted); font-size: 8px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+    .hardware-item strong { display: block; font-size: 11px; line-height: 1.45; }
+    .hardware-message { margin: 0 14px 14px; padding: 11px 13px; border-left: 3px solid var(--red); background: #fff7f7; color: #8e3030; font-size: 10px; line-height: 1.55; }
+    .hardware-message.ready { border-left-color: #25865f; background: #eef7f2; color: #186447; }
+    .hardware-action { display: flex; align-items: center; }
+    .write-confirm { grid-column: 1 / -1; display: flex !important; align-items: flex-start; gap: 9px; margin: 0 !important; padding: 11px 13px; border: 1px solid #edd8ae; border-radius: 9px; background: #fffaf0; color: #76501a !important; font-size: 10px !important; line-height: 1.5; letter-spacing: 0 !important; text-transform: none !important; }
+    .write-confirm input { flex: 0 0 auto; width: 16px !important; height: 16px !important; margin: 0; accent-color: var(--brand); }
     .receiving-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 14px; }
     .receiving-stat { padding: 14px; border: 1px solid var(--line); border-radius: 11px; background: #f8fbf9; }
     .receiving-stat span { display: block; color: var(--muted); font-size: 8px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
@@ -245,6 +252,7 @@
       .catalog-toolbar { grid-template-columns: 1fr 180px; }
       .catalog-results { grid-column: 1 / -1; }
       .receiving-stats { grid-template-columns: repeat(2, 1fr); }
+      .hardware-grid { grid-template-columns: 1fr 1fr; }
     }
     @media (max-width: 640px) {
       .sidebar { padding: 14px 16px; }
@@ -265,6 +273,8 @@
       .receiving-stats { grid-template-columns: 1fr 1fr; }
       .catalog-toolbar { grid-template-columns: 1fr; }
       .catalog-results { grid-column: auto; }
+      .hardware-grid { grid-template-columns: 1fr; }
+      .hardware-action .button { width: 100%; }
     }
     @media (max-width: 760px) {
       .inventory-responsive { padding: 10px; background: #f7faf8; }
@@ -284,12 +294,12 @@
   <div class="shell">
     <aside class="sidebar">
       <div class="brand">
-        <img class="brand-logo" src="/assets/patak-logo.png?v=2" alt="Patak Tekstil">
+        <img class="brand-logo" src="/assets/globaltex-logo.png" alt="Globaltex Fine Linens">
       </div>
       <nav aria-label="Dashboard sections">
         <a data-route="overview" href="/dashboard">Overview</a>
         <a data-route="receiving" data-globaltex-only href="/dashboard/receiving">1. Product preparation</a>
-        <a data-route="inventory" href="/dashboard/inventory">2. Envanter</a>
+        <a data-route="inventory" href="/dashboard/inventory">2. Inventory</a>
         <a data-route="deliveries" href="/dashboard/deliveries">3. Shipping & receiving</a>
         <a data-route="activity" data-globaltex-only href="/dashboard/activity">Activity history</a>
         <a data-route="exceptions" href="/dashboard/exceptions">Exceptions</a>
@@ -390,6 +400,16 @@
 
         <div class="page" data-page="receiving" hidden>
           <section class="hero"><div><div class="eyebrow">STEP 1 · PRODUCT PREPARATION</div><h1>Link RFID tags to products</h1><p>Select the product, write or scan tags in bulk, review them, and add them to inventory in one operation.</p></div></section>
+          <section class="panel hardware-readiness" aria-live="polite">
+            <div class="panel-head"><h2>RFID reader readiness</h2><span id="rfid-hardware-state" class="badge warning">Checking connection</span></div>
+            <div class="hardware-grid">
+              <div class="hardware-item"><span>Configured connection</span><strong id="rfid-port">Checking...</strong></div>
+              <div class="hardware-item"><span>Available operations</span><strong id="rfid-capabilities">Inventory read · EPC write · read-back verification</strong></div>
+              <div class="hardware-item"><span>Safe operating mode</span><strong>Hardware actions remain locked until the configured reader is detected.</strong></div>
+              <div class="hardware-action"><button class="button" id="rfid-status-refresh" type="button">Check connection</button></div>
+            </div>
+            <p class="hardware-message" id="rfid-hardware-message">Checking the configured serial port...</p>
+          </section>
           <section class="panel" style="margin-bottom:14px">
             <div class="panel-head"><h2>Are the tags blank?</h2><span>Skip this step if they already have EPC codes</span></div>
             <div class="user-form">
@@ -440,7 +460,7 @@
               <div class="form-actions"><button class="button" id="shipment-scan" type="button">Scan products in bulk</button></div>
               <div class="progress-box" id="shipment-package-status">The package is empty. Pass the physical products through the reader.</div>
               <div class="asset-picker" id="shipment-assets"><div class="empty">No products scanned yet.</div></div>
-              <div class="form-actions"><button class="button danger" id="shipment-clear" type="button" disabled>Paketi temizle</button></div>
+              <div class="form-actions"><button class="button danger" id="shipment-clear" type="button" disabled>Clear package</button></div>
               <div class="form-actions"><button class="button" id="shipment-submit" type="submit" disabled>Send shipment package</button></div>
               <div class="form-message" id="shipment-message"></div>
             </form>
@@ -448,7 +468,7 @@
           <section class="panel" style="margin-bottom:14px">
             <div class="panel-head"><h2>2. Receive at hotel</h2><span>Scan, compare, and approve</span></div>
             <form class="user-form" id="receiving-form">
-              <div class="wide"><label for="receiving-shipment">Gelen sevkiyat paketi</label><select id="receiving-shipment" required></select></div>
+              <div class="wide"><label for="receiving-shipment">Incoming shipment package</label><select id="receiving-shipment" required></select></div>
               <div class="form-actions"><button class="button" id="receiving-start" type="button">Start receiving</button></div>
               <div class="form-actions"><button class="button" id="receiving-scan" type="button" disabled>Scan products</button><button class="button" id="receiving-accept" type="button" disabled>Accept delivery</button></div>
               <div class="progress-box" id="receiving-progress">Select an incoming shipment and start receiving.</div>
@@ -495,6 +515,7 @@
             <form class="user-form" id="batch-form">
               <div><label for="batch-quantity">Number of items</label><input id="batch-quantity" type="number" min="1" max="5000" value="1" required></div>
               <div class="wide"><label>Operator instruction</label><div class="progress-box" id="batch-progress">Select the product above, enter quantity and place one blank tag on the writer.</div></div>
+              <label class="write-confirm"><input id="batch-write-confirm" type="checkbox" required> I confirm that exactly one blank, unlocked test tag is on the writer and that changing its EPC is intended.</label>
               <div class="form-actions"><button class="button" id="batch-next" type="submit">Write next tag</button></div>
               <div class="form-message" id="batch-message"></div>
             </form>
@@ -563,6 +584,7 @@
         "Send products to the hotel": "Enviar productos al hotel", "Scan products in bulk": "Escanear productos en lote",
         "Send shipment package": "Enviar paquete", "Start receiving": "Iniciar recepción", "Scan products": "Escanear productos",
         "Accept delivery": "Aceptar entrega", "Shipment packages": "Paquetes de envío", "RECORDS": "REGISTROS",
+        "Clear package": "Vaciar paquete", "Incoming shipment package": "Paquete de envío entrante",
         "Who did what, and when?": "¿Quién hizo qué y cuándo?", "Loading activity...": "Cargando actividad...",
         "Loading shipments...": "Cargando envíos...", "Selected operation": "Operación seleccionada",
         "Connecting to operations API": "Conectando con la API de operaciones", "Checking US RFID standard...": "Comprobando el estándar RFID de EE. UU."
@@ -584,6 +606,7 @@
         "Send products to the hotel": "Ürünleri otele gönder", "Scan products in bulk": "Ürünleri toplu okut",
         "Send shipment package": "Sevkiyat paketini gönder", "Start receiving": "Teslim almayı başlat", "Scan products": "Ürünleri okut",
         "Accept delivery": "Teslimatı onayla", "Shipment packages": "Sevkiyat paketleri", "RECORDS": "KAYITLAR",
+        "Clear package": "Paketi temizle", "Incoming shipment package": "Gelen sevkiyat paketi",
         "Who did what, and when?": "Kim, ne zaman, ne yaptı?", "Loading activity...": "İşlemler yükleniyor...",
         "Loading shipments...": "Sevkiyatlar yükleniyor...", "Selected operation": "Seçili işletme",
         "Connecting to operations API": "Operasyon API'sine bağlanıyor", "Checking US RFID standard...": "ABD RFID standardı kontrol ediliyor..."
@@ -871,7 +894,7 @@
         `${expected ? Math.min(scanned / expected * 100, 100) : 0}%`;
       const scan = document.querySelector("#receiving-batch-scan");
       const approve = document.querySelector("#receiving-batch-approve");
-      scan.disabled = !batch || batch.status !== "draft";
+      scan.disabled = !currentRfidHardware?.detected || !batch || batch.status !== "draft";
       approve.disabled = !batch?.canApprove;
       const message = document.querySelector("#receiving-batch-message");
       if (!batch) message.textContent = "Create or select an open batch.";
@@ -1030,11 +1053,11 @@
         <td><strong>${number.format(group.quantity)}</strong></td>
       </tr>`);
       document.querySelector("#shipment-assets").innerHTML = rows.length
-        ? table(["Ürün", "SKU", "Okutulan adet"], rows)
-        : '<div class="empty">Henüz ürün okutulmamış.</div>';
+        ? table(["Product", "SKU", "Scanned units"], rows)
+        : '<div class="empty">No products have been scanned yet.</div>';
       document.querySelector("#shipment-package-status").textContent = outgoingPackageEpcs.size
-        ? `Pakette ${number.format(outgoingPackageEpcs.size)} fiziksel ürün var · ${number.format(groups.size)} farklı SKU.`
-        : "Paket boş. Göndereceğiniz fiziksel ürünleri okuyucudan geçirin.";
+        ? `${number.format(outgoingPackageEpcs.size)} physical units in the package · ${number.format(groups.size)} unique SKUs.`
+        : "The package is empty. Pass the physical products through the reader.";
       document.querySelector("#shipment-clear").disabled = !outgoingPackageEpcs.size;
       document.querySelector("#shipment-submit").disabled = !outgoingPackageEpcs.size;
     }
@@ -1071,42 +1094,42 @@
       if (action === "receiving_batch.approved") {
         const quantity = Number(item.details?.quantity || 0);
         return quantity
-          ? `${number.format(quantity)} ürünlük parti onaylandı ve envantere eklendi`
-          : "Ürün partisi onaylandı ve envantere eklendi";
+          ? `Batch of ${number.format(quantity)} units approved and added to inventory`
+          : "Product batch approved and added to inventory";
       }
       if (action === "shipment.shipping") {
         const quantity = Number(item.details?.quantity || 0);
-        return `${quantity ? `${number.format(quantity)} ürünlük ` : ""}sevkiyat paketi otele gönderildi`;
+        return `${quantity ? `${number.format(quantity)}-unit ` : ""}shipment package sent to the hotel`;
       }
       if (action === "shipment.receiving") {
         const quantity = Number(item.details?.quantity || 0);
-        return `${quantity ? `${number.format(quantity)} ürünlük ` : ""}otel teslimatı doğrulandı ve kabul edildi`;
+        return `${quantity ? `${number.format(quantity)}-unit ` : ""}hotel delivery verified and accepted`;
       }
       const rules = [
-        [/^POST \/v1\/admin\/receiving-batches\/[^/]+\/scan$/, "Ürün partisi için RFID etiketleri okundu"],
-        [/^POST \/v1\/admin\/receiving-batches\/[^/]+\/approve$/, "Ürün partisi envantere alma onayı verildi"],
-        [/^DELETE \/v1\/admin\/receiving-batches\/[^/]+\/tags\//, "Hatalı etiket ürün partisinden çıkarıldı"],
-        [/^POST \/v1\/admin\/receiving-batches$/, "Yeni ürün kabul partisi oluşturuldu"],
-        [/^POST \/v1\/admin\/hardware\/rru9809\/scan$/, "RFID etiketi okundu"],
-        [/^POST \/v1\/admin\/hardware\/rru9809\/write$/, "RFID etiketine yeni EPC kodu yazıldı"],
-        [/^POST \/v1\/admin\/zoho\/assets\/register$/, "Okunan EPC seçili ürüne bağlandı"],
-        [/^POST \/v1\/admin\/assets\/register$/, "Ürün etiketleri envantere kaydedildi"],
-        [/^POST \/v1\/admin\/encoding\/batches$/, "Yeni etiket yazma partisi oluşturuldu"],
-        [/^POST \/v1\/admin\/shipments\/[^/]+\/accept$/, "Otel teslimatı kabul edildi ve stok devredildi"],
-        [/^POST \/v1\/admin\/shipments$/, "Otele gönderim kaydı oluşturuldu"],
-        [/^POST \/v1\/admin\/sessions\/[^/]+\/complete$/, "RFID sayım oturumu tamamlandı"],
-        [/^POST \/v1\/admin\/sessions$/, "RFID sayım oturumu başlatıldı"],
-        [/^POST \/v1\/admin\/assets\/[^/]+\/status$/, "Ürün durumu değiştirildi"],
-        [/^POST \/v1\/admin\/exceptions\/[^/]+\/resolve$/, "İstisna kaydı çözüldü"],
-        [/^POST \/v1\/admin\/alerts\/[^/]+\/acknowledge$/, "Uyarı görüldü olarak işaretlendi"],
-        [/^POST \/v1\/admin\/catalog\/import$/, "Ürün kataloğu içe aktarıldı"],
-        [/^POST \/v1\/admin\/users$/, "Yeni kullanıcı oluşturuldu"],
-        [/^POST \/v1\/admin\/facilities$/, "Yeni tesis kaydedildi"],
-        [/^POST \/v1\/admin\/zones$/, "Yeni stok alanı kaydedildi"],
-        [/^POST \/v1\/admin\/readers$/, "RFID okuyucu kaydedildi"]
+        [/^POST \/v1\/admin\/receiving-batches\/[^/]+\/scan$/, "RFID tags scanned for the product batch"],
+        [/^POST \/v1\/admin\/receiving-batches\/[^/]+\/approve$/, "Product batch approved for inventory"],
+        [/^DELETE \/v1\/admin\/receiving-batches\/[^/]+\/tags\//, "Incorrect tag removed from the product batch"],
+        [/^POST \/v1\/admin\/receiving-batches$/, "New product receiving batch created"],
+        [/^POST \/v1\/admin\/hardware\/rru9809\/scan$/, "RFID tag scanned"],
+        [/^POST \/v1\/admin\/hardware\/rru9809\/write$/, "New EPC written to RFID tag"],
+        [/^POST \/v1\/admin\/zoho\/assets\/register$/, "Scanned EPC linked to the selected product"],
+        [/^POST \/v1\/admin\/assets\/register$/, "Product tags registered in inventory"],
+        [/^POST \/v1\/admin\/encoding\/batches$/, "New tag-encoding batch created"],
+        [/^POST \/v1\/admin\/shipments\/[^/]+\/accept$/, "Hotel delivery accepted and inventory transferred"],
+        [/^POST \/v1\/admin\/shipments$/, "Hotel shipment record created"],
+        [/^POST \/v1\/admin\/sessions\/[^/]+\/complete$/, "RFID inventory session completed"],
+        [/^POST \/v1\/admin\/sessions$/, "RFID inventory session started"],
+        [/^POST \/v1\/admin\/assets\/[^/]+\/status$/, "Product status updated"],
+        [/^POST \/v1\/admin\/exceptions\/[^/]+\/resolve$/, "Exception resolved"],
+        [/^POST \/v1\/admin\/alerts\/[^/]+\/acknowledge$/, "Alert acknowledged"],
+        [/^POST \/v1\/admin\/catalog\/import$/, "Product catalog imported"],
+        [/^POST \/v1\/admin\/users$/, "New user created"],
+        [/^POST \/v1\/admin\/facilities$/, "New facility registered"],
+        [/^POST \/v1\/admin\/zones$/, "New inventory zone registered"],
+        [/^POST \/v1\/admin\/readers$/, "RFID reader registered"]
       ];
       const match = rules.find(([pattern]) => pattern.test(action));
-      return match ? match[1] : action.replace(/^POST /, "İşlem: ").replace(/^DELETE /, "Silme işlemi: ");
+      return match ? match[1] : action.replace(/^POST /, "Action: ").replace(/^DELETE /, "Delete action: ");
     }
     function groupAuditItems(items) {
       const grouped = new Map();
@@ -1137,12 +1160,12 @@
         if (action.endsWith("/register")) group.registrations += 1;
       }
       return [...grouped.values()].map(item => {
-        if (item.kind === "batch-scan") item.summary = `Ürün partisi toplu olarak tarandı (${number.format(item.count)} tarama)`;
+        if (item.kind === "batch-scan") item.summary = `Product batch scanned in bulk (${number.format(item.count)} scans)`;
         if (item.kind === "tag-write") {
           const quantity = Math.max(item.writes, item.registrations);
-          item.summary = `${number.format(quantity)} RFID etiketi yazıldı ve ürüne bağlandı`;
+          item.summary = `${number.format(quantity)} RFID tags written and linked to products`;
         }
-        if (item.kind === "tag-read") item.summary = `RFID okuma yapıldı (${number.format(item.count)} işlem)`;
+        if (item.kind === "tag-read") item.summary = `RFID scan completed (${number.format(item.count)} operations)`;
         return item;
       }).slice(0, 30);
     }
@@ -1157,7 +1180,7 @@
         <td>${badge(item.actorRole)}</td><td title="${escapeHtml(item.action)}"><strong>${escapeHtml(auditDescription(item))}</strong></td>
       </tr>`);
       document.querySelector("#audit-content").innerHTML =
-        table(["Tarih", "Kullanıcı", "Yetki", "Yapılan işlem"], rows);
+        table(["Date", "User", "Role", "Activity"], rows);
     }
     function renderIntegrations(items) {
       if (!items.length) {
@@ -1185,11 +1208,49 @@
     let currentFacilities = [];
     let currentZones = [];
     let currentReceivingBatches = [];
+    let currentRfidHardware = null;
     let activeReceivingSession = null;
     let batchTarget = 0;
     let batchCompleted = 0;
     let managedUsers = [];
     let editingUserId = null;
+
+    function renderRfidHardware(status) {
+      currentRfidHardware = status;
+      const detected = Boolean(status?.detected);
+      const state = document.querySelector("#rfid-hardware-state");
+      state.className = `badge ${detected ? "online" : "offline"}`;
+      state.textContent = detected ? "Reader ready" : "Reader unavailable";
+      document.querySelector("#rfid-port").textContent =
+        `${status?.configuredPort || "Not configured"} · ${number.format(status?.baudRate || 0)} baud`;
+      document.querySelector("#rfid-capabilities").textContent =
+        status?.capabilities?.writeReadbackVerification
+          ? "Inventory read · EPC write · read-back verification"
+          : "Capability information unavailable";
+      const message = document.querySelector("#rfid-hardware-message");
+      message.className = `hardware-message${detected ? " ready" : ""}`;
+      message.textContent = status?.message || "Reader status could not be determined.";
+      ["#receiving-batch-scan", "#encoding-read", "#batch-next", "#shipment-scan"].forEach(selector => {
+        document.querySelector(selector).disabled = !detected;
+      });
+      const receivingScan = document.querySelector("#receiving-scan");
+      if (!detected) receivingScan.disabled = true;
+    }
+
+    function assertRfidHardware() {
+      if (!currentRfidHardware?.detected) {
+        throw new Error(currentRfidHardware?.message || "RFID reader is not connected. Check the configured COM port first.");
+      }
+    }
+
+    async function refreshRfidHardware() {
+      const status = await request(
+        "/v1/admin/hardware/rru9809/status",
+        tenantOptions(currentIdentity.tenantId)
+      );
+      renderRfidHardware(status);
+      return status;
+    }
 
     function selectedUserTenants() {
       return [...document.querySelectorAll("#user-tenants input:checked")].map(input => input.value);
@@ -1318,11 +1379,12 @@
         ,request("/v1/admin/receiving-batches", options)
         ,request("/v1/admin/encoding/batches", options)
         ,request("/v1/admin/standards/profile", options)
+        ,request("/v1/admin/hardware/rru9809/status", options)
       ];
       if (identity.role === "chain_admin") {
         requests.push(request("/v1/admin/chain/summary", options));
       }
-      const [summary, movements, health, audit, integrations, alerts, exceptions, shipments, zohoCatalog, assets, facilities, zones, catalog, receivingBatches, encodingBatches, standards, chain] =
+      const [summary, movements, health, audit, integrations, alerts, exceptions, shipments, zohoCatalog, assets, facilities, zones, catalog, receivingBatches, encodingBatches, standards, hardware, chain] =
         await Promise.all(requests);
       currentFacilities = facilities.facilities;
       currentZones = zones.zones;
@@ -1344,6 +1406,7 @@
       renderReceivingBatches(receivingBatches.batches);
       renderZohoCatalog(zohoCatalog, summary);
       renderEncodingBatches(encodingBatches.batches);
+      renderRfidHardware(hardware);
       renderStatus(summary);
       renderExceptions(exceptions.exceptions);
       renderAlerts(activeAlerts);
@@ -1416,6 +1479,7 @@
       if (!batchId) return;
       message.textContent = "Scanning nearby RFID tags...";
       try {
+        assertRfidHardware();
         const result = await request(`/v1/admin/receiving-batches/${encodeURIComponent(batchId)}/scan`, {
           method: "POST",
           headers: { "content-type": "application/json", "x-tenant-id": currentIdentity.tenantId },
@@ -1480,6 +1544,21 @@
       });
     });
     addEventListener("popstate", () => showRoute(routeFromPath()));
+    document.querySelector("#rfid-status-refresh").addEventListener("click", async event => {
+      const button = event.currentTarget;
+      const message = document.querySelector("#rfid-hardware-message");
+      button.disabled = true;
+      button.textContent = "Checking...";
+      try {
+        await refreshRfidHardware();
+      } catch (error) {
+        message.className = "hardware-message";
+        message.textContent = error.message;
+      } finally {
+        button.disabled = false;
+        button.textContent = "Check connection";
+      }
+    });
     document.querySelector("#logout").addEventListener("click", async () => {
       await fetch("/v1/auth/logout", { method: "POST" });
       location.replace("/login");
@@ -1575,6 +1654,7 @@
       const message = document.querySelector("#encoding-read-result");
       message.textContent = "Reading the tag...";
       try {
+        assertRfidHardware();
         const result = await request("/v1/admin/hardware/rru9809/scan", {
           method: "POST",
           headers: { "content-type": "application/json", "x-tenant-id": currentIdentity.tenantId },
@@ -1628,6 +1708,7 @@
       const message = document.querySelector("#batch-message");
       const progress = document.querySelector("#batch-progress");
       try {
+        assertRfidHardware();
         message.classList.remove("success");
         const requested = Number(document.querySelector("#batch-quantity").value);
         if (!batchTarget || batchCompleted >= batchTarget) {
@@ -1655,6 +1736,7 @@
         }`;
         message.classList.add("success");
         message.textContent = `Verified EPC ${written.epc}`;
+        document.querySelector("#batch-write-confirm").checked = false;
         document.querySelector("#batch-next").textContent =
           batchCompleted < batchTarget ? "Write next tag" : "Start another batch";
       } catch (error) {
@@ -1666,8 +1748,9 @@
       const message = document.querySelector("#shipment-message");
       const button = document.querySelector("#shipment-scan");
       try {
+        assertRfidHardware();
         button.disabled = true;
-        button.textContent = "Okunuyor...";
+        button.textContent = "Scanning...";
         const result = await request("/v1/admin/hardware/rru9809/scan", {
           method: "POST",
           headers: { "content-type": "application/json", "x-tenant-id": currentIdentity.tenantId },
@@ -1685,13 +1768,13 @@
         const added = outgoingPackageEpcs.size - before;
         renderOutgoingPackage();
         message.classList.add("success");
-        message.textContent = `${number.format(added)} yeni ürün pakete eklendi${rejected ? ` · ${number.format(rejected)} kayıtlı/aktif olmayan etiket alınmadı` : ""}.`;
+        message.textContent = `${number.format(added)} new products added to the package${rejected ? ` · ${number.format(rejected)} unregistered or inactive tags skipped` : ""}.`;
       } catch (error) {
         message.classList.remove("success");
         message.textContent = error.message;
       } finally {
-        button.disabled = false;
-        button.textContent = "Ürünleri toplu okut";
+        button.disabled = !currentRfidHardware?.detected;
+        button.textContent = "Scan products in bulk";
       }
     });
     document.querySelector("#shipment-clear").addEventListener("click", () => {
@@ -1699,14 +1782,14 @@
       renderOutgoingPackage();
       const message = document.querySelector("#shipment-message");
       message.classList.remove("success");
-      message.textContent = "Paket temizlendi.";
+      message.textContent = "Package cleared.";
     });
     document.querySelector("#shipment-form").addEventListener("submit", async event => {
       event.preventDefault();
       const message = document.querySelector("#shipment-message");
       try {
         const epcs = [...outgoingPackageEpcs];
-        if (!epcs.length) throw new Error("Önce gönderilecek fiziksel ürünleri toplu okutun.");
+        if (!epcs.length) throw new Error("Scan the physical products before creating a shipment.");
         const reference = document.querySelector("#shipment-reference").value.trim();
         const result = await request("/v1/admin/shipments", {
           method: "POST",
@@ -1719,7 +1802,7 @@
             epcs
           })
         });
-        message.textContent = `${result.reference || result.shipmentId} paketi ${number.format(result.assetCount)} ürünle sevkiyata hazırlandı.`;
+        message.textContent = `${result.reference || result.shipmentId} is ready to ship with ${number.format(result.assetCount)} products.`;
         outgoingPackageEpcs.clear();
         document.querySelector("#shipment-form").reset();
         await load();
@@ -1743,7 +1826,7 @@
             reference: shipment.reference || shipment.shipmentId
           })
         });
-        document.querySelector("#receiving-scan").disabled = false;
+        document.querySelector("#receiving-scan").disabled = !currentRfidHardware?.detected;
         document.querySelector("#receiving-accept").disabled = false;
         document.querySelector("#receiving-progress").textContent = "Receiving started. Place the delivery tags on the reader and press Scan tags.";
         message.textContent = "";
@@ -1764,6 +1847,7 @@
     document.querySelector("#receiving-scan").addEventListener("click", async () => {
       const message = document.querySelector("#receiving-message");
       try {
+        assertRfidHardware();
         const shipmentId = document.querySelector("#receiving-shipment").value;
         const shipment = currentShipments.find(item => item.shipmentId === shipmentId);
         const result = await request("/v1/admin/hardware/rru9809/scan", {

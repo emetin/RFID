@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { SerialPort } from "serialport";
 import {
   createSessionToken,
   hashPassword,
@@ -22,6 +23,7 @@ const EPC_PATTERN = /^[0-9A-F]{8,96}$/;
 const DASHBOARD = readFileSync(new URL("../../public/dashboard.html", import.meta.url), "utf8");
 const LOGIN = readFileSync(new URL("../../public/login.html", import.meta.url), "utf8");
 const PATAK_LOGO = readFileSync(new URL("../../public/assets/patak-logo.png", import.meta.url));
+const GLOBALTEX_LOGO = readFileSync(new URL("../../public/assets/globaltex-logo.png", import.meta.url));
 const ADMIN_ROLES = new Set(["viewer", "operator", "hotel_admin", "chain_admin"]);
 const CUSTOMER_API_SCOPES = new Set([
   "catalog:read", "catalog:write", "assets:write", "inventory:read",
@@ -381,6 +383,10 @@ export function createApp({
 
       if (request.method === "GET" && url.pathname === "/assets/patak-logo.png") {
         return binary(response, 200, PATAK_LOGO, "image/png");
+      }
+
+      if (request.method === "GET" && url.pathname === "/assets/globaltex-logo.png") {
+        return binary(response, 200, GLOBALTEX_LOGO, "image/png");
       }
 
       if (request.method === "POST" && url.pathname === "/v1/auth/login") {
@@ -785,6 +791,37 @@ export function createApp({
             return json(response, 200, { reads, ingestion });
           } catch (error) {
             return json(response, 422, { error: "rru9809_scan_failed", message: error.message });
+          }
+        }
+
+        if (request.method === "GET" && url.pathname === "/v1/admin/hardware/rru9809/status") {
+          try {
+            const configuredPort = process.env.RRU9809_PORT ?? "COM4";
+            const baudRate = Number(process.env.RRU9809_BAUD_RATE ?? 57600);
+            const ports = await SerialPort.list();
+            const detectedPort = ports.find((port) =>
+              String(port.path).toLowerCase() === configuredPort.toLowerCase()
+            );
+            return json(response, 200, {
+              configuredPort,
+              baudRate,
+              detected: Boolean(detectedPort),
+              availablePorts: ports.map((port) => ({
+                path: port.path,
+                manufacturer: port.manufacturer ?? null,
+                vendorId: port.vendorId ?? null,
+                productId: port.productId ?? null
+              })),
+              capabilities: { inventoryRead: true, epcWrite: true, writeReadbackVerification: true },
+              message: detectedPort
+                ? `Reader detected on ${configuredPort}`
+                : `No reader detected on ${configuredPort}. Connect the RRU9809USB-L and confirm its COM port.`
+            });
+          } catch (error) {
+            return json(response, 503, {
+              error: "rru9809_status_failed",
+              message: error.message
+            });
           }
         }
 

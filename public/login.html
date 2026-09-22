@@ -5,50 +5,74 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sign in · Globaltex RFID</title>
   <style>
-    :root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #17211d; background: #edf3ef; }
+    :root {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #221f17; background: #f7f4ec;
+      --brand: #D8BC55; --brand-dark: #9d8123; --brand-soft: #f5edcf;
+      --ink: #221f17; --muted: #746d5d; --line: #e8dfc6;
+    }
     * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; background:
-      radial-gradient(circle at 14% 16%, rgb(62 151 113 / 20%), transparent 28%),
-      radial-gradient(circle at 88% 82%, rgb(46 117 91 / 18%), transparent 24%),
-      #edf3ef; }
-    .shell { width: min(1040px, 100%); min-height: 620px; display: grid; grid-template-columns: 1.08fr .92fr;
-      border: 1px solid rgb(255 255 255 / 70%); border-radius: 28px; overflow: hidden;
-      background: #fff; box-shadow: 0 30px 90px rgb(26 57 44 / 17%); }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; background: #f5f2e9; }
+    .shell { width: min(1080px, 100%); min-height: 640px; display: grid; grid-template-columns: 1.08fr .92fr;
+      border: 1px solid rgb(216 188 85 / 30%); border-radius: 30px; overflow: hidden;
+      background: #fff; }
     .story { padding: clamp(38px, 6vw, 76px); color: #fff; display: flex; flex-direction: column;
-      background: radial-gradient(circle at 20% 15%, rgb(105 210 165 / 28%), transparent 33%),
-      linear-gradient(145deg, #0e392b, #0a261f); }
-    .brand { display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 800; letter-spacing: .13em; }
-    .mark { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 13px;
-      background: linear-gradient(145deg, #69d4a7, #258360); box-shadow: 0 12px 28px rgb(0 0 0 / 23%); }
+      background: #1d1b15; position: relative; isolation: isolate; }
+    .story::after { content: ""; position: absolute; inset: 0; z-index: -1; opacity: .12; background-image:
+      linear-gradient(90deg, transparent 49.5%, var(--brand) 50%, transparent 50.5%),
+      linear-gradient(transparent 49.5%, var(--brand) 50%, transparent 50.5%); background-size: 56px 56px; mask-image: linear-gradient(to bottom right, #000, transparent 70%); }
+    .brand { display: flex; flex-direction: column; align-items: center; align-self: center; gap: 10px; width: min(290px, 100%); text-align: center; }
+    .brand-logo { width: 150px; height: 136px; object-fit: contain; }
+    .brand-title { display: flex; align-items: center; gap: 12px; width: 100%; color: #fff; font-size: 12px; font-weight: 850; letter-spacing: .19em; text-transform: uppercase; }
+    .brand-title::before, .brand-title::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, transparent, rgb(216 188 85 / 70%)); }
+    .brand-title::after { background: linear-gradient(90deg, rgb(216 188 85 / 70%), transparent); }
     .story-main { margin: auto 0; }
-    .eyebrow { color: #8ed7b8; font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+    .eyebrow { color: var(--brand); font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
     h1 { margin: 16px 0; max-width: 500px; font-size: clamp(36px, 5vw, 58px); line-height: 1.02; letter-spacing: -.045em; }
-    .story p { max-width: 470px; color: #bcd3ca; line-height: 1.7; }
-    .proof { display: flex; gap: 20px; color: #8faea2; font-size: 11px; }
-    .proof span::before { content: "●"; color: #61d29f; margin-right: 7px; }
+    .story p { max-width: 470px; color: #d5cfbd; line-height: 1.7; }
+    .proof { display: flex; gap: 20px; color: #bbb39f; font-size: 11px; }
+    .proof span::before { content: "●"; color: var(--brand); margin-right: 7px; }
     .form-side { padding: clamp(36px, 6vw, 72px); display: flex; flex-direction: column; justify-content: center; }
     .form-side h2 { margin: 0; font-size: 29px; letter-spacing: -.03em; }
-    .intro { margin: 9px 0 30px; color: #6a7771; font-size: 14px; line-height: 1.6; }
-    label { display: block; margin: 0 0 8px; color: #52615a; font-size: 12px; font-weight: 750; }
-    input { width: 100%; height: 48px; padding: 0 14px; border: 1px solid #d7e1dc; border-radius: 11px;
-      outline: none; color: #17211d; background: #fbfcfb; font: inherit; transition: .15s; }
-    input:focus { border-color: #3d9671; box-shadow: 0 0 0 4px rgb(61 150 113 / 12%); background: #fff; }
+    .intro { margin: 9px 0 30px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+    label { display: block; margin: 0 0 8px; color: #5e5748; font-size: 12px; font-weight: 750; }
+    input { width: 100%; height: 50px; padding: 0 15px; border: 1px solid var(--line); border-radius: 12px;
+      outline: none; color: var(--ink); background: #fdfcf9; font: inherit; transition: .18s; }
+    input:focus { border-color: var(--brand-dark); outline: 2px solid rgb(216 188 85 / 22%); outline-offset: 1px; background: #fff; }
     .field + .field { margin-top: 18px; }
     button { width: 100%; height: 49px; margin-top: 24px; border: 0; border-radius: 11px; cursor: pointer;
-      color: #fff; background: linear-gradient(135deg, #206d51, #2a8c68); font-weight: 750;
-      box-shadow: 0 13px 28px rgb(35 128 94 / 22%); }
-    button:hover { filter: brightness(1.04); }
+      color: #211d12; background: var(--brand); font-weight: 800; transition: .18s ease; }
+    button:hover { background: #c8aa40; }
+    button:focus-visible { outline: 3px solid rgb(216 188 85 / 30%); outline-offset: 3px; }
     button:disabled { opacity: .65; cursor: wait; }
     .error { min-height: 20px; margin-top: 14px; color: #b43838; font-size: 12px; }
-    .foot { margin-top: 28px; padding-top: 20px; border-top: 1px solid #edf1ee; color: #87928d; font-size: 11px; line-height: 1.6; }
-    @media (max-width: 780px) { .shell { grid-template-columns: 1fr; } .story { min-height: 280px; padding: 34px; }
-      .story-main { margin: 50px 0 30px; } .story h1 { font-size: 36px; } .proof { display: none; } }
+    .foot { margin-top: 28px; padding-top: 20px; border-top: 1px solid #eee8da; color: #8b8474; font-size: 11px; line-height: 1.6; }
+    @media (max-width: 780px) {
+      body { padding: 12px; }
+      .shell { grid-template-columns: 1fr; border-radius: 24px; }
+      .story { min-height: 430px; padding: 30px; }
+      .brand { width: min(260px, 100%); }
+      .brand-logo { width: 122px; height: 108px; }
+      .brand-title { font-size: 10px; letter-spacing: .16em; }
+      .story-main { margin: 40px 0 26px; text-align: center; }
+      .story h1 { margin-inline: auto; font-size: 36px; }
+      .story p { margin-inline: auto; }
+      .proof { display: none; }
+      .form-side { padding: 42px 30px; }
+    }
+    @media (max-width: 420px) {
+      .story { min-height: 390px; padding: 26px 22px; }
+      .brand-logo { width: 108px; height: 94px; }
+      .brand-title { gap: 8px; font-size: 9px; }
+      .story-main { margin: 30px 0 18px; }
+      .story h1 { font-size: 32px; }
+    }
   </style>
 </head>
 <body>
   <main class="shell">
     <section class="story">
-      <div class="brand"><span class="mark">G</span><span>GLOBALTEX RFID</span></div>
+      <div class="brand"><img class="brand-logo" src="/assets/globaltex-logo.png" alt="Globaltex Fine Linens"><span class="brand-title">RFID Operations</span></div>
       <div class="story-main">
         <div class="eyebrow">Hotel textile intelligence</div>
         <h1>Every item.<br>One clear history.</h1>
