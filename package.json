@@ -9,6 +9,7 @@
   },
   "scripts": {
     "start:api": "node --disable-warning=ExperimentalWarning src/api/server.js",
+    "start:preview": "node --disable-warning=ExperimentalWarning --env-file=data/templates/preview.env src/api/server.js",
     "start:api:pilot": "node --disable-warning=ExperimentalWarning --env-file=data/runtime/local-pilot.env src/api/server.js",
     "demo": "node src/demo.js",
     "gateway:simulate": "node src/gateway/cli.js simulate",

@@ -1,3 +1,4 @@
+import { nextLinenCycle } from "./linen-cycle.js";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
@@ -42,6 +43,10 @@ function toInventory(row) {
     readCount: row.read_count,
     lastRssi: row.last_rssi,
     lastAntenna: row.last_antenna
+    ,useCount: row.use_count ?? 0, cyclePhase: row.cycle_phase ?? "clean", inTransit: Boolean(row.in_transit)
+    ,washCount: row.wash_count ?? 0
+    ,inspectionRequired: Boolean(row.inspection_required)
+    ,lastCleanReturnAt: row.last_clean_return_at ?? null
   };
 }
 
@@ -52,6 +57,12 @@ export class SqliteStore {
     if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
     this.#database = new DatabaseSync(path);
     this.#database.exec(MIGRATION);
+    const assetColumns = new Set(this.#database.prepare("PRAGMA table_info(rfid_assets)").all().map((row) => row.name));
+    if (!assetColumns.has("use_count")) this.#database.exec("ALTER TABLE rfid_assets ADD COLUMN use_count INTEGER NOT NULL DEFAULT 0");
+    if (!assetColumns.has("cycle_phase")) this.#database.exec("ALTER TABLE rfid_assets ADD COLUMN cycle_phase TEXT NOT NULL DEFAULT 'clean'");
+    if (!assetColumns.has("wash_count")) this.#database.exec("ALTER TABLE rfid_assets ADD COLUMN wash_count INTEGER NOT NULL DEFAULT 0");
+    if (!assetColumns.has("inspection_required")) this.#database.exec("ALTER TABLE rfid_assets ADD COLUMN inspection_required INTEGER NOT NULL DEFAULT 0");
+    if (!assetColumns.has("last_clean_return_at")) this.#database.exec("ALTER TABLE rfid_assets ADD COLUMN last_clean_return_at TEXT");
   }
 
   close() {
@@ -61,6 +72,33 @@ export class SqliteStore {
   readinessCheck() {
     this.#database.prepare("SELECT 1 AS ready").get();
     return { status: "ready", store: "sqlite" };
+  }
+
+  operationsFor(tenantId) {
+    const row = this.#database.prepare("SELECT document FROM hotel_operations WHERE tenant_id = ?").get(tenantId);
+    return row ? JSON.parse(row.document) : { hotels: [], policies: [], requests: [] };
+  }
+
+  productUsage(tenantId, sku) {
+    return {
+      registered: Number(this.#database.prepare("SELECT COUNT(*) AS n FROM rfid_assets WHERE tenant_id = ? AND sku = ? AND status <> 'retired'").get(tenantId,sku).n),
+      encoding: Number(this.#database.prepare("SELECT COUNT(*) AS n FROM encoding_jobs j JOIN encoding_batches b ON b.batch_id = j.batch_id WHERE j.tenant_id = ? AND b.sku = ? AND j.status IN ('queued','leased')").get(tenantId,sku).n),
+      receiving: Number(this.#database.prepare("SELECT COUNT(*) AS n FROM receiving_batches WHERE tenant_id = ? AND sku = ? AND status = 'draft'").get(tenantId,sku).n)
+    };
+  }
+
+  operationsTenantIds() {
+    return this.#database.prepare("SELECT tenant_id FROM hotel_operations").all().map((r) => r.tenant_id);
+  }
+
+  updateOperations(tenantId, update) {
+    return this.#transaction(() => {
+      const state = this.operationsFor(tenantId);
+      const result = update(state);
+      this.#database.prepare(`INSERT INTO hotel_operations (tenant_id, document) VALUES (?, ?)
+        ON CONFLICT (tenant_id) DO UPDATE SET document = excluded.document`).run(tenantId, JSON.stringify(state));
+      return result;
+    });
   }
 
   createAdminUser({
@@ -275,7 +313,7 @@ export class SqliteStore {
   }
 
   claimEncodingJob(tenantId, {
-    stationId, leaseSeconds = 60, now = new Date().toISOString()
+    stationId, batchId = null, leaseSeconds = 60, now = new Date().toISOString()
   }) {
     if (!stationId) throw new Error("stationId is required");
     const seconds = Math.min(Math.max(Number(leaseSeconds) || 60, 15), 600);
@@ -287,9 +325,9 @@ export class SqliteStore {
       `).run(now, tenantId, now);
       const job = this.#database.prepare(`
         SELECT * FROM encoding_jobs
-        WHERE tenant_id = ? AND status = 'queued'
+        WHERE tenant_id = ? AND status = 'queued' AND (? IS NULL OR batch_id = ?)
         ORDER BY batch_id, sequence_number LIMIT 1
-      `).get(tenantId);
+      `).get(tenantId, batchId, batchId);
       if (!job) return null;
       const leaseToken = randomUUID();
       const leaseUntil = new Date(Date.parse(now) + seconds * 1000).toISOString();
@@ -564,15 +602,15 @@ export class SqliteStore {
 
   registerAssets(tenantId, assets) {
     const productExists = this.#database.prepare(`
-      SELECT 1 FROM products WHERE tenant_id = ? AND sku = ?
+      SELECT 1 FROM products WHERE tenant_id = ? AND sku = ? AND active = 1
     `);
     const existingAsset = this.#database.prepare(`
       SELECT tenant_id, sku FROM rfid_assets WHERE epc = ?
     `);
     const insert = this.#database.prepare(`
       INSERT INTO rfid_assets (
-        tenant_id, epc, sku, tid, status, encoded_at
-      ) VALUES (?, ?, ?, ?, ?, ?)
+        tenant_id, epc, sku, tid, status, encoded_at, wash_count, inspection_required, last_clean_return_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const insertCustody = this.#database.prepare(`
       INSERT INTO asset_custody_history (
@@ -613,7 +651,10 @@ export class SqliteStore {
           asset.sku,
           asset.tid ?? null,
           status,
-          asset.encodedAt ?? null
+          asset.encodedAt ?? null,
+          Number(asset.washCount ?? 0),
+          asset.inspectionRequired ? 1 : 0,
+          asset.lastCleanReturnAt ?? null
         );
         const recordedAt = new Date().toISOString();
         insertLifecycle.run(
@@ -829,8 +870,8 @@ export class SqliteStore {
     shipmentId = randomUUID(),
     actorId = "system"
   }) {
-    if (!customerTenantId || customerTenantId === tenantId) {
-      throw new Error("A different customerTenantId is required");
+    if (!customerTenantId) {
+      throw new Error("customerTenantId is required");
     }
     if (!destinationFacilityId) throw new Error("destinationFacilityId is required");
     if (!Array.isArray(epcs) || epcs.length === 0) throw new Error("epcs must not be empty");
@@ -838,7 +879,7 @@ export class SqliteStore {
     if (normalized.length !== epcs.length) throw new Error("Shipment contains duplicate EPCs");
 
     const asset = this.#database.prepare(`
-      SELECT sku FROM rfid_assets WHERE tenant_id = ? AND epc = ?
+      SELECT sku, status FROM rfid_assets WHERE tenant_id = ? AND epc = ?
     `);
     const insertShipment = this.#database.prepare(`
       INSERT INTO shipments (
@@ -856,6 +897,11 @@ export class SqliteStore {
       const assets = normalized.map((epc) => {
         const found = asset.get(tenantId, epc);
         if (!found) throw new Error(`EPC ${epc} is not owned by supplier tenant`);
+        if (found.status !== "active") throw new Error(`EPC ${epc} is not available for shipment`);
+        const reserved = this.#database.prepare(`SELECT 1 FROM shipment_assets sa
+          JOIN shipments s ON s.shipment_id = sa.shipment_id
+          WHERE s.supplier_tenant_id = ? AND sa.epc = ? AND sa.accepted_at IS NULL`).get(tenantId, epc);
+        if (reserved) throw new Error(`EPC ${epc} is already reserved in a shipment`);
         return { epc, sku: found.sku };
       });
       insertShipment.run(
@@ -928,7 +974,7 @@ export class SqliteStore {
     const expected = new Set(manifest.map((item) => item.epc));
     const scanned = new Set(scannedRows.map((item) => item.epc));
     const received = [...expected].filter((epc) => scanned.has(epc));
-    const missing = [...expected].filter((epc) => !scanned.has(epc));
+    const missing = manifest.filter(item => !item.accepted_at && !scanned.has(item.epc)).map(item => item.epc);
     const unexpected = [...scanned].filter((epc) => !expected.has(epc));
 
     let acceptanceTime = null;
@@ -969,6 +1015,9 @@ export class SqliteStore {
         for (const epc of received) {
           const manifestAsset = manifest.find((item) => item.epc === epc);
           if (manifestAsset.accepted_at) continue;
+          this.#database.prepare(`UPDATE exception_cases SET status = 'resolved', resolution = 'corrected',
+            resolved_by = 'shipment_acceptance', resolved_at = ? WHERE tenant_id = ? AND shipment_id = ?
+            AND epc = ? AND exception_type = 'shipment_missing' AND status = 'open'`).run(acceptedAt, tenantId, shipmentId, epc);
           const product = sourceProduct.get(shipment.supplier_tenant_id, manifestAsset.sku);
           if (!product) throw new Error(`Product ${manifestAsset.sku} is no longer available`);
           copyProduct.run(
@@ -1392,6 +1441,14 @@ export class SqliteStore {
               observedAt: event.observedAt
             }
           });
+          const targetZone = this.#database.prepare(
+            "SELECT zone_type FROM zones WHERE tenant_id = ? AND zone_id = ?"
+          ).get(tenantId, zoneId);
+          const cycleAsset = this.#database.prepare("SELECT * FROM rfid_assets WHERE tenant_id = ? AND epc = ?").get(tenantId, event.epc);
+          if (cycleAsset) {
+            const cycle = nextLinenCycle(cycleAsset, targetZone?.zone_type);
+            this.#database.prepare(`UPDATE rfid_assets SET use_count = ?, cycle_phase = ?, wash_count = ?, inspection_required = CASE WHEN ? >= 60 THEN 1 ELSE inspection_required END, last_clean_return_at = CASE WHEN ? THEN ? ELSE last_clean_return_at END WHERE tenant_id = ? AND epc = ?`).run(cycle.useCount, cycle.cyclePhase, cycle.washCount, cycle.washCount, Number(cycle.washed), event.observedAt, tenantId, event.epc);
+          }
         }
         upsertPosition.run(
           tenantId,
@@ -1469,6 +1526,10 @@ export class SqliteStore {
         i.*,
         a.sku,
         COALESCE(a.status, 'unregistered') AS asset_status
+        ,COALESCE(a.wash_count, 0) AS wash_count
+        ,COALESCE(a.inspection_required, 0) AS inspection_required
+        ,a.last_clean_return_at, a.use_count, a.cycle_phase
+        ,EXISTS(SELECT 1 FROM shipment_assets sa JOIN shipments s ON s.shipment_id = sa.shipment_id WHERE s.supplier_tenant_id = i.tenant_id AND sa.epc = i.epc AND sa.accepted_at IS NULL) AS in_transit
       FROM inventory_positions i
       LEFT JOIN rfid_assets a
         ON a.tenant_id = i.tenant_id AND a.epc = i.epc
@@ -2047,7 +2108,7 @@ export class SqliteStore {
     caseId,
     { resolution, actorId, now = new Date().toISOString() }
   ) {
-    const allowed = new Set(["corrected", "accepted_exception", "quarantined", "dismissed"]);
+    const allowed = new Set(["corrected", "accepted_exception", "quarantined", "dismissed", "reassigned_property", "misplaced", "quarantine_bill"]);
     if (!allowed.has(resolution)) throw new Error("Unsupported exception resolution");
     const existing = this.#database.prepare(`
       SELECT * FROM exception_cases WHERE tenant_id = ? AND case_id = ?
@@ -2405,6 +2466,7 @@ export class SqliteStore {
       };
     }).sort((a, b) => a.sku.localeCompare(b.sku));
 
+    const transit = new Set(this.inventoryFor(tenantId).filter(a => a.inTransit).map(a => a.epc));
     return {
       filters: {
         facilityId: facilityId ?? null,
@@ -2414,7 +2476,8 @@ export class SqliteStore {
       uniqueUnits: rows.length,
       registeredUnits: rows.length - unknownUnits,
       unknownUnits,
-      availableUnits: statusCounts.active,
+      availableUnits: rows.filter(row => row.asset_status === "active" && !transit.has(row.epc)).length,
+      inTransitUnits: rows.filter(row => transit.has(row.epc)).length,
       statusCounts,
       lines
     };
@@ -2481,6 +2544,7 @@ export class SqliteStore {
       status: row.status,
       createdAt: row.created_at,
       acceptedAt: row.accepted_at,
+      assets: this.#database.prepare("SELECT epc, sku, accepted_at AS acceptedAt FROM shipment_assets WHERE shipment_id = ?").all(row.shipment_id),
       assetCount: Number(row.asset_count),
       acceptedAssetCount: Number(row.accepted_asset_count)
     };

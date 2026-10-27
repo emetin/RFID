@@ -7,6 +7,8 @@ The platform creates tenant-scoped, deduplicated exception cases for:
 - `unknown_asset`: an observed EPC is not registered to the reading tenant;
 - `shipment_missing`: an expected manifest EPC was not in the accepted receiving session;
 - `shipment_unexpected`: a receiving session contained an EPC outside the manifest.
+- `wash_threshold`: an asset reached its configured inspection threshold;
+- `not_seen_30_days`: a positioned asset has not been observed for 30 days.
 
 Repeated reads of the same unknown EPC update one case instead of creating an
 unbounded case stream. Shipment cases use shipment, session, exception type and
@@ -41,11 +43,14 @@ Supported resolutions are:
 - `accepted_exception`
 - `quarantined`
 - `dismissed`
+- `reassigned_property`
+- `misplaced`
+- `quarantine_bill`
 
 Resolution records the authenticated actor, timestamp and resolution, adds the
 API mutation to the audit log, and writes an `exception.resolved` integration
 outbox event. Repeating a completed resolution is idempotent.
 
-`quarantined` currently records the operational decision. Physical quarantine
-zone movement and the final damaged/lost/retired asset lifecycle remain separate
-workflows that must be configured for the pilot property.
+`quarantine_bill` also moves a registered asset into the `quarantined`
+lifecycle state. Billing remains an integration/outbox concern; the dashboard
+records the billing-review decision and does not fabricate an invoice.

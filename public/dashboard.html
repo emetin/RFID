@@ -21,12 +21,16 @@
       --amber: #c57918;
       --red: #b63d3d;
       --blue: #326ca8;
+      --cyan: #1685a5;
+      --violet: #7056b8;
+      --live: #20a875;
       background: var(--canvas);
       color: var(--ink);
     }
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
     body { margin: 0; min-height: 100vh; background: var(--canvas); }
+    body.nav-open { overflow: hidden; }
     button, select, input { font: inherit; }
     .shell { min-height: 100vh; }
     .page[hidden] { display: none !important; }
@@ -42,7 +46,23 @@
       display: flex;
       flex-direction: column;
       z-index: 10;
+      box-shadow: 10px 0 40px rgb(22 20 15 / 8%);
     }
+    .nav-backdrop { display: none; }
+    .mobile-menu-button {
+      display: none; width: 42px; height: 42px; flex: 0 0 42px; padding: 0;
+      border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink);
+      align-items: center; justify-content: center; flex-direction:column; cursor: pointer;
+    }
+    .mobile-menu-button span, .mobile-menu-button::before, .mobile-menu-button::after {
+      content: ""; display: block; width: 18px; height: 2px; border-radius: 2px; background: currentColor;
+      transition: transform .2s ease, opacity .2s ease;
+    }
+    .mobile-menu-button span { margin: 4px 0; }
+    .mobile-menu-button[aria-expanded="true"] span { opacity: 0; }
+    .mobile-menu-button[aria-expanded="true"]::before { transform: translateY(6px) rotate(45deg); }
+    .mobile-menu-button[aria-expanded="true"]::after { transform: translateY(-6px) rotate(-45deg); }
+    .topbar-logo { display:none; width:42px; height:42px; object-fit:contain; }
     .brand { display: flex; align-items: center; justify-content: center; min-height: 96px; padding: 0 7px 24px; border-bottom: 1px solid rgb(216 188 85 / 16%); margin-bottom: 14px; }
     .brand-logo {
       display: block; width: 128px; height: 112px; object-fit: contain;
@@ -60,7 +80,7 @@
     }
     .nav-more summary::-webkit-details-marker { display: none; }
     .nav-more summary::after { content: "+"; float: right; }
-    .nav-more[open] summary::after { content: "âˆ’"; }
+    .nav-more[open] summary::after { content: "−"; }
     .nav-more summary:hover, .nav-more[open] summary { color: #fff; background: #2b281f; }
     .nav-more div { display: grid; gap: 4px; padding: 4px 0 0 9px; }
     .sidebar-foot {
@@ -87,7 +107,8 @@
       cursor: pointer;
     }
     .context { display: flex; align-items: center; gap: 12px; min-width: 0; }
-    .context-dot { width: 9px; height: 9px; border-radius: 50%; background: #25865f; }
+    .context-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--live); box-shadow: 0 0 0 0 rgb(32 168 117 / 45%); animation: live-pulse 2s infinite; }
+    @keyframes live-pulse { 60% { box-shadow: 0 0 0 7px rgb(32 168 117 / 0%); } 100% { box-shadow: 0 0 0 0 rgb(32 168 117 / 0%); } }
     .context strong { display: block; font-size: 12px; }
     .context small { display: block; color: var(--muted); margin-top: 2px; font-size: 10px; }
     .toolbar { display: flex; align-items: center; gap: 10px; }
@@ -125,6 +146,12 @@
       background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
     }
     .kpi { padding: 17px; position: relative; overflow: hidden; }
+    .kpi { border-top: 3px solid var(--accent, var(--blue)); box-shadow: 0 8px 25px rgb(45 57 65 / 5%); }
+    .kpi:nth-child(2) { --accent: var(--live); }
+    .kpi:nth-child(3) { --accent: var(--amber); }
+    .kpi:nth-child(4) { --accent: var(--cyan); }
+    .kpi:nth-child(5) { --accent: var(--red); }
+    .kpi:nth-child(6) { --accent: var(--violet); }
     .kpi::after {
       content: ""; position: absolute; width: 72px; height: 72px; border-radius: 50%;
       right: -34px; top: -34px; background: var(--tint, #e7f2ed);
@@ -134,6 +161,7 @@
     .kpi-note { margin-top: 4px; min-height: 14px; color: #817b6d; font-size: 9px; }
     .layout { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(280px, .85fr); gap: 14px; margin-bottom: 14px; }
     .panel { overflow: hidden; min-width: 0; }
+    .panel { box-shadow: 0 10px 32px rgb(45 57 65 / 5%); }
     .panel-head {
       padding: 16px 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
       border-bottom: 1px solid var(--line);
@@ -223,7 +251,10 @@
     .hardware-item strong { display: block; font-size: 11px; line-height: 1.45; }
     .hardware-message { margin: 0 14px 14px; padding: 11px 13px; border-left: 3px solid var(--red); background: #fff7f7; color: #8e3030; font-size: 10px; line-height: 1.55; }
     .hardware-message.ready { border-left-color: #25865f; background: #eef7f2; color: #186447; }
-    .hardware-action { display: flex; align-items: center; }
+    .hardware-action { display:grid; gap:8px; align-content:center; min-width:220px; }
+    .hardware-action .button { width:100%; min-height:42px; }
+    #rfid-auto-detect { color:#725a0a; background:#fff; border-color:#d8bc55; }
+    #rfid-auto-detect:hover { background:#fff9e7; }
     .write-confirm { grid-column: 1 / -1; display: flex !important; align-items: flex-start; gap: 9px; margin: 0 !important; padding: 11px 13px; border: 1px solid #edd8ae; border-radius: 9px; background: #fffaf0; color: #76501a !important; font-size: 10px !important; line-height: 1.5; letter-spacing: 0 !important; text-transform: none !important; }
     .write-confirm input { flex: 0 0 auto; width: 16px !important; height: 16px !important; margin: 0; accent-color: var(--brand); }
     .receiving-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 14px; }
@@ -232,19 +263,65 @@
     .receiving-stat strong { display: block; margin-top: 7px; font-size: 24px; }
     .receiving-meter { height: 12px; margin: 0 14px 14px; overflow: hidden; border-radius: 999px; background: #e5ece8; }
     .receiving-meter div { height: 100%; width: 0; border-radius: inherit; background: var(--green-600); transition: width .2s ease; }
+    .par-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; padding:14px; }
+    .par-card { padding:16px; border:1px solid var(--line); border-radius:11px; background:#faf9f5; }
+    .par-card span { color:var(--muted); font-size:9px; font-weight:800; text-transform:uppercase; }
+    .par-card strong { display:block; margin-top:8px; font-size:27px; }
+    .par-warning { margin:0 14px 14px; padding:11px; border-radius:9px; background:#fff0d8; color:#98600f; font-size:11px; }
+    .kpi-action { width:100%; border:0; color:inherit; background:transparent; padding:0; text-align:left; cursor:pointer; }
+    dialog { width:min(760px,calc(100vw - 32px)); border:1px solid var(--line); border-radius:14px; padding:0; box-shadow:0 24px 80px #0004; }
+    dialog::backdrop { background:#17140daa; }
+    .dialog-body { padding:16px; max-height:65vh; overflow:auto; }
+    .portal-panel { border:3px solid #282419; }
+    .portal-panel .receiving-stat { color:#fff; background:#282419; border-color:#282419; }
+    .portal-panel .receiving-stat span { color:#d8d1bf; }
+    .runtime-warning { margin:0 0 14px; padding:14px 16px; border:1px solid #e8b6b6; border-radius:11px; color:#8d2929; background:#fff4f4; font-size:12px; line-height:1.6; }
+    .runtime-warning code { padding:2px 5px; border-radius:4px; color:#542020; background:#f5dddd; }
+    .monitor-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; padding:14px; }
+    .monitor-card { padding:16px; border:1px solid var(--line); border-radius:11px; background:#faf9f5; }
+    .monitor-card { position:relative; overflow:hidden; border:0; box-shadow:inset 0 0 0 1px rgb(255 255 255 / 45%), 0 8px 22px rgb(37 50 60 / 8%); }
+    .monitor-card:nth-child(1) { background:linear-gradient(135deg,#e2f7ee,#f7fffb); color:#126545; }
+    .monitor-card:nth-child(2) { background:linear-gradient(135deg,#fff0d7,#fffaf0); color:#875309; }
+    .monitor-card:nth-child(3) { background:linear-gradient(135deg,#e5f2fb,#f7fbff); color:#225f8a; }
+    .monitor-card:nth-child(4) { background:linear-gradient(135deg,#eee9ff,#faf8ff); color:#594398; }
+    .monitor-card::after { content:""; position:absolute; width:74px; height:74px; border-radius:50%; right:-30px; top:-32px; background:currentColor; opacity:.08; }
+    .monitor-card span { color:var(--muted); font-size:9px; font-weight:800; text-transform:uppercase; }
+    .monitor-card strong { display:block; margin-top:8px; font-size:24px; }
+    .tracker-toolbar { display:grid; grid-template-columns:minmax(240px,1fr) minmax(300px,1.35fr) auto; gap:12px; align-items:end; padding:14px; background:#f7fbf9; border-bottom:1px solid var(--line); }
+    .tracker-toolbar label { display:grid; gap:6px; color:var(--muted); font-size:9px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }
+    .tracker-toolbar input, .tracker-toolbar select { width:100%; max-width:none; min-height:42px; border:1px solid #cfdcd6; border-radius:10px; background:#fff; padding:0 12px; color:var(--ink); font:inherit; }
+    .tracker-result-count { align-self:center; min-width:120px; color:#236d5b; font-size:10px; font-weight:800; text-align:right; }
+    .tracker-summary { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; padding:14px; }
+    .tracker-stat { min-height:98px; padding:14px; border-radius:12px; background:#edf5f1; color:#235b4d; }
+    .tracker-stat:nth-child(2) { background:#e1f7eb; color:#126545; }
+    .tracker-stat:nth-child(3) { background:#e7f1ff; color:#285f92; }
+    .tracker-stat:nth-child(4) { background:#fff0dd; color:#945c12; }
+    .tracker-stat:nth-child(5) { background:#eee9ff; color:#5b4599; }
+    .tracker-stat:nth-child(6) { background:#f1f1f1; color:#5e625f; }
+    .tracker-stat span { display:block; font-size:8px; font-weight:900; letter-spacing:.06em; text-transform:uppercase; }
+    .tracker-stat strong { display:block; margin-top:9px; font-size:25px; }
+    .tracker-meta { display:flex; flex-wrap:wrap; gap:9px; padding:0 14px 14px; }
+    .tracker-meta span { padding:7px 10px; border-radius:999px; background:#f3f6f4; color:var(--muted); font-size:9px; }
+    .tracker-location-title { padding:13px 14px 0; font-size:11px; }
+    [data-page="monitoring"] > .hero { padding:18px 20px; border-radius:16px; color:#fff; background:linear-gradient(125deg,#173f4b 0%,#1b6f6a 55%,#257e68 100%); box-shadow:0 16px 38px rgb(21 78 73 / 18%); }
+    [data-page="monitoring"] > .hero .eyebrow, [data-page="monitoring"] > .hero p { color:#d5f4ec; }
+    [data-page="monitoring"] .panel-head { background:linear-gradient(90deg,#fff,#f5fbf9); }
     @media (max-width: 1240px) { .kpis { grid-template-columns: repeat(3, 1fr); } }
     @media (max-width: 920px) {
-      .sidebar { position: static; width: auto; min-height: auto; padding: 18px 20px; }
-      .brand { justify-content: flex-start; min-height: 0; padding: 0; }
-      .brand-logo { width: 170px; height: auto; }
-      nav { display: flex; gap: 4px; margin-top: 14px; overflow-x: auto; scrollbar-width: none; }
-      nav::-webkit-scrollbar { display: none; }
-      nav a { flex: 0 0 auto; }
-      .nav-more { flex: 0 0 auto; }
-      .nav-more div { padding-left: 0; }
-      .sidebar-foot { display: none; }
+      .sidebar { position:fixed; width:min(310px,86vw); min-height:100vh; padding:18px 16px; transform:translateX(-105%); transition:transform .22s ease; z-index:30; }
+      body.nav-open .sidebar { transform:translateX(0); }
+      .nav-backdrop { display:block; position:fixed; inset:0; z-index:29; border:0; background:rgb(12 17 18 / 55%); opacity:0; pointer-events:none; transition:opacity .22s ease; }
+      body.nav-open .nav-backdrop { opacity:1; pointer-events:auto; }
+      .brand { justify-content:flex-start; min-height:78px; padding:0 7px 15px; }
+      .brand-logo { width:124px; height:92px; }
+      nav { display:grid; gap:5px; margin-top:10px; overflow:visible; }
+      nav a { font-size:13px; padding:13px 14px; }
+      .nav-more div { padding-left:9px; }
+      .sidebar-foot { display:block; }
       .workspace { margin-left: 0; }
-      .topbar { position: static; }
+      .topbar { position:sticky; padding-left:14px; }
+      .mobile-menu-button { display:flex; }
+      .topbar-logo { display:block; }
       .layout { grid-template-columns: 1fr; }
       .workflow-grid { grid-template-columns: 1fr; }
       .user-form { grid-template-columns: repeat(2, 1fr); }
@@ -253,16 +330,23 @@
       .catalog-results { grid-column: 1 / -1; }
       .receiving-stats { grid-template-columns: repeat(2, 1fr); }
       .hardware-grid { grid-template-columns: 1fr 1fr; }
+      .par-grid { grid-template-columns:1fr 1fr; }
+      .monitor-grid { grid-template-columns:1fr 1fr; }
+      .tracker-toolbar { grid-template-columns:1fr 1fr; }
+      .tracker-result-count { grid-column:1 / -1; text-align:left; }
+      .tracker-summary { grid-template-columns:repeat(3,1fr); }
     }
     @media (max-width: 640px) {
-      .sidebar { padding: 14px 16px; }
-      .brand-logo { width: 150px; height: auto; }
-      .topbar, .hero { align-items: stretch; flex-direction: column; }
-      .topbar { gap: 12px; padding: 12px 16px; }
-      .toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; width: 100%; gap: 7px; }
+      .hero { align-items:stretch; flex-direction:column; }
+      .topbar { display:grid; grid-template-columns:auto auto minmax(0,1fr); gap:8px; padding:10px 12px; }
+      .context { min-width:0; }
+      .context strong, .context small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .toolbar { grid-column:1 / -1; display:grid; grid-template-columns:minmax(0,1fr) auto auto; width:100%; gap:7px; }
       .toolbar select { width: 100%; min-width: 0; max-width: none; }
       .toolbar .button { padding-inline: 10px; }
       .kpis { grid-template-columns: repeat(2, 1fr); }
+      .kpi { min-height:118px; padding:14px; }
+      .kpi-value { font-size:24px; }
       .user-form { grid-template-columns: 1fr; }
       .user-form .wide { grid-column: span 1; }
       .form-actions .button { width: 100%; }
@@ -275,6 +359,18 @@
       .catalog-results { grid-column: auto; }
       .hardware-grid { grid-template-columns: 1fr; }
       .hardware-action .button { width: 100%; }
+      .par-grid { grid-template-columns:1fr 1fr; }
+      .monitor-grid { grid-template-columns:1fr 1fr; gap:8px; padding:10px; }
+      .monitor-card { min-height:100px; padding:14px; }
+      .tracker-toolbar { grid-template-columns:1fr; padding:10px; }
+      .tracker-result-count { grid-column:auto; }
+      .tracker-summary { grid-template-columns:1fr 1fr; padding:10px; }
+      [data-page="monitoring"] > .hero { padding:18px; }
+    }
+    @media (max-width: 390px) {
+      .kpis, .monitor-grid, .par-grid, .receiving-stats { grid-template-columns:1fr; }
+      .toolbar { grid-template-columns:1fr 1fr; }
+      .toolbar .language-select { grid-column:1 / -1; }
     }
     @media (max-width: 760px) {
       .inventory-responsive { padding: 10px; background: #f7faf8; }
@@ -297,10 +393,12 @@
         <img class="brand-logo" src="/assets/globaltex-logo.png" alt="Globaltex Fine Linens">
       </div>
       <nav aria-label="Dashboard sections">
+        <a href="/dashboard/control#hotels">Hotels, accounts and stock requests</a>
         <a data-route="overview" href="/dashboard">Overview</a>
         <a data-route="receiving" data-globaltex-only href="/dashboard/receiving">1. Product preparation</a>
         <a data-route="inventory" href="/dashboard/inventory">2. Inventory</a>
         <a data-route="deliveries" href="/dashboard/deliveries">3. Shipping & receiving</a>
+        <a data-route="monitoring" href="/dashboard/monitoring">Live monitoring</a>
         <a data-route="activity" data-globaltex-only href="/dashboard/activity">Activity history</a>
         <a data-route="exceptions" href="/dashboard/exceptions">Exceptions</a>
         <details class="nav-more">
@@ -317,9 +415,12 @@
         PostgreSQL + Edge Gateway
       </div>
     </aside>
+    <button class="nav-backdrop" id="nav-backdrop" type="button" aria-label="Close navigation"></button>
 
     <div class="workspace">
       <header class="topbar">
+        <button class="mobile-menu-button" id="mobile-menu" type="button" aria-label="Open navigation" aria-expanded="false"><span></span></button>
+        <img class="topbar-logo" src="/assets/globaltex-logo.png" alt="Globaltex">
         <div class="context">
           <span class="context-dot"></span>
           <div><strong id="tenant-name">Loading hotel...</strong><small id="sync-state">Connecting to operations API</small></div>
@@ -327,8 +428,6 @@
         <div class="toolbar">
           <select class="language-select" id="language-select" aria-label="Language">
             <option value="en">English</option>
-            <option value="es">Español</option>
-            <option value="tr">Türkçe</option>
           </select>
           <select id="tenant-select" aria-label="Select hotel" hidden></select>
           <button class="button" id="refresh" type="button">Refresh</button>
@@ -337,6 +436,7 @@
       </header>
 
       <main>
+        <div class="runtime-warning" id="runtime-warning" hidden></div>
         <div class="page" data-page="overview">
           <section class="hero">
             <div><div class="eyebrow" id="overview-eyebrow">RFID OPERATIONS</div><h1 id="overview-title">Hotel textile control</h1><p id="overview-description">Live item visibility and operational health for the selected hotel.</p></div>
@@ -345,12 +445,17 @@
           <section class="kpis" aria-label="Key metrics">
             <article class="kpi"><div class="kpi-label">Physical units</div><div class="kpi-value" id="units">&mdash;</div><div class="kpi-note">All observed EPCs</div></article>
             <article class="kpi" style="--tint:#dff3e9"><div class="kpi-label">Available</div><div class="kpi-value" id="available">&mdash;</div><div class="kpi-note">Active stock</div></article>
-            <article class="kpi" style="--tint:#fff0d8"><div class="kpi-label">Open exceptions</div><div class="kpi-value" id="exceptions-count">&mdash;</div><div class="kpi-note">Needs review</div></article>
+            <article class="kpi" style="--tint:#fff0d8"><button class="kpi-action" id="open-exceptions" type="button"><div class="kpi-label">Open exceptions</div><div class="kpi-value" id="exceptions-count">&mdash;</div><div class="kpi-note">Click to resolve</div></button></article>
             <article class="kpi"><div class="kpi-label">Pending moves</div><div class="kpi-value" id="pending">&mdash;</div><div class="kpi-note">Awaiting evidence</div></article>
             <article class="kpi" style="--tint:#fde5e5"><div class="kpi-label">Reader issues</div><div class="kpi-value" id="reader-issues">&mdash;</div><div class="kpi-note">Offline or degraded</div></article>
             <article class="kpi"><div class="kpi-label">Active alerts</div><div class="kpi-value" id="active-alerts">&mdash;</div><div class="kpi-note">Operational attention</div></article>
           </section>
           <div class="standard-note" id="standards-note">Checking US RFID standard...</div>
+          <section class="panel" data-globaltex-only style="margin-bottom:14px">
+            <div class="panel-head"><h2>What needs action?</h2><span>Requests → shipment → verified receiving</span></div>
+            <div class="workflow-grid" id="admin-next-steps"><a class="workflow-step" href="/dashboard/control#stock"><strong>Hotel requests</strong><p>Review and prepare replenishment.</p></a></div>
+          </section>
+          <section class="panel" style="margin-bottom:14px"><div class="panel-head"><h2>Hotel PAR levels</h2><span>Live linen lifecycle</span></div><div class="par-grid"><div class="par-card"><span>Clean stock</span><strong id="par-clean">—</strong></div><div class="par-card"><span>In room</span><strong id="par-room">—</strong></div><div class="par-card"><span>Soiled</span><strong id="par-soiled">—</strong></div><div class="par-card"><span>In wash</span><strong id="par-wash">—</strong></div></div><div class="par-warning" id="par-warning" hidden>Clean stock is below the configured safety margin.</div></section>
           <section class="panel" style="margin-bottom:14px">
             <div class="panel-head"><h2>What would you like to do?</h2><span>Three core operations</span></div>
             <div class="workflow-grid">
@@ -363,6 +468,21 @@
             <article class="panel"><div class="panel-head"><h2>Asset status</h2><span>Physical vs available</span></div><div class="status-list" id="status-content"><div class="empty">Loading status distribution...</div></div></article>
             <article class="panel" id="chain-panel" hidden><div class="panel-head"><h2>Chain overview</h2><span>Allowed hotels</span></div><div class="chain-card"><small>Chain-wide physical units</small><strong id="chain-units">&mdash;</strong><p id="chain-detail">Loading chain totals...</p></div></article>
           </section>
+        </div>
+
+        <div class="page" data-page="monitoring" hidden>
+          <section class="hero"><div><div class="eyebrow">LIVE OPERATIONS</div><h1>Monitoring center</h1><p>Follow reader telemetry, linen flow, stock risk and unresolved exceptions from one screen.</p></div><div class="role-chip"><span class="context-dot"></span><span id="monitor-refresh-state">Auto-refresh every 60 seconds</span></div></section>
+          <section class="panel" style="margin-bottom:14px">
+            <div class="panel-head"><h2>Product tracking</h2><span>SKU · lifecycle · location</span></div>
+            <div class="tracker-toolbar">
+              <label>Search product<input id="tracker-search" type="search" placeholder="Search by SKU or product name" autocomplete="off"></label>
+              <label>Select product<select id="tracker-product"><option>Loading products...</option></select></label>
+              <div class="tracker-result-count" id="tracker-result-count">—</div>
+            </div>
+            <div id="tracker-detail"><div class="empty">Loading RFID product positions...</div></div>
+          </section>
+          <section class="panel" style="margin-bottom:14px"><div class="panel-head"><h2>Operational pulse</h2><span>Current hotel</span></div><div class="monitor-grid"><div class="monitor-card"><span>Readers online</span><strong id="monitor-readers">—</strong></div><div class="monitor-card"><span>Open exceptions</span><strong id="monitor-exceptions">—</strong></div><div class="monitor-card"><span>Pending movements</span><strong id="monitor-movements">—</strong></div><div class="monitor-card"><span>Clean stock</span><strong id="monitor-clean">—</strong></div></div></section>
+          <section class="layout"><article class="panel"><div class="panel-head"><h2>Reader telemetry</h2><span>Physical link and heartbeat</span></div><div id="monitor-health"><div class="empty">Loading reader telemetry...</div></div></article><article class="panel"><div class="panel-head"><h2>Attention required</h2><span>Exceptions and alerts</span></div><div id="monitor-attention"><div class="empty">Loading attention queue...</div></div></article></section>
         </div>
 
         <div class="page" data-page="inventory" hidden>
@@ -406,7 +526,7 @@
               <div class="hardware-item"><span>Configured connection</span><strong id="rfid-port">Checking...</strong></div>
               <div class="hardware-item"><span>Available operations</span><strong id="rfid-capabilities">Inventory read · EPC write · read-back verification</strong></div>
               <div class="hardware-item"><span>Safe operating mode</span><strong>Hardware actions remain locked until the configured reader is detected.</strong></div>
-              <div class="hardware-action"><button class="button" id="rfid-status-refresh" type="button">Check connection</button></div>
+              <div class="hardware-action"><button class="button" id="rfid-status-refresh" type="button">Check connection</button><button class="button" id="rfid-auto-detect" type="button">Auto-detect / Scan ports</button></div>
             </div>
             <p class="hardware-message" id="rfid-hardware-message">Checking the configured serial port...</p>
           </section>
@@ -429,8 +549,8 @@
               <div class="form-message" id="receiving-batch-create-message"></div>
             </form>
           </section>
-          <section class="panel" style="margin-bottom:14px">
-            <div class="panel-head"><h2>2. Scan and reconcile</h2><span>Unique EPC count</span></div>
+          <section class="panel portal-panel" style="margin-bottom:14px">
+            <div class="panel-head"><h2>2. Bulk cart / portal scan</h2><span>100–300 items · unique EPC count</span></div>
             <div class="user-form">
               <div class="wide"><label for="receiving-batch-select">Open batch</label><select id="receiving-batch-select"></select></div>
               <div class="form-actions"><button class="button" id="receiving-batch-scan" type="button">Scan tags</button></div>
@@ -440,7 +560,7 @@
             <div class="receiving-stats">
               <div class="receiving-stat"><span>Expected</span><strong id="receiving-expected">0</strong></div>
               <div class="receiving-stat"><span>Scanned</span><strong id="receiving-scanned">0</strong></div>
-              <div class="receiving-stat"><span>Remaining</span><strong id="receiving-remaining">0</strong></div>
+              <div class="receiving-stat"><span>Missing</span><strong id="receiving-remaining">0</strong></div>
               <div class="receiving-stat"><span>Conflicts / overage</span><strong id="receiving-conflicts">0</strong></div>
             </div>
             <div class="receiving-meter"><div id="receiving-meter-bar"></div></div>
@@ -451,6 +571,7 @@
 
         <div class="page" data-page="deliveries" hidden>
           <section class="hero"><div><div class="eyebrow">STEP 3 · SHIPPING & RECEIVING</div><h1>Send products to the hotel</h1><p>Scan the physical products to create the EPC package. The hotel verifies the same package and accepts delivery.</p></div></section>
+          <div class="progress-box" id="linked-request-note" hidden style="margin-bottom:14px"></div>
           <section class="panel" data-globaltex-only style="margin-bottom:14px">
             <div class="panel-head"><h2>1. Prepare shipment package</h2><span>Scan physical products in bulk</span></div>
             <form class="user-form" id="shipment-form">
@@ -563,6 +684,7 @@
       </main>
     </div>
   </div>
+  <dialog id="exception-dialog"><div class="panel-head"><h2>Resolve exception</h2><button class="mini-button" id="close-exceptions" type="button">Close</button></div><div class="dialog-body" id="exception-dialog-content"></div></dialog>
 
   <script>
     const number = new Intl.NumberFormat("en-US");
@@ -587,7 +709,14 @@
         "Clear package": "Vaciar paquete", "Incoming shipment package": "Paquete de envío entrante",
         "Who did what, and when?": "¿Quién hizo qué y cuándo?", "Loading activity...": "Cargando actividad...",
         "Loading shipments...": "Cargando envíos...", "Selected operation": "Operación seleccionada",
-        "Connecting to operations API": "Conectando con la API de operaciones", "Checking US RFID standard...": "Comprobando el estándar RFID de EE. UU."
+        "Connecting to operations API": "Conectando con la API de operaciones", "Checking US RFID standard...": "Comprobando el estándar RFID de EE. UU.",
+        "Link connected": "Enlace conectado", "Link disconnected": "Enlace desconectado", "Telemetry": "Telemetría", "standby": "en espera", "timeout": "tiempo agotado", "online": "en línea", "degraded": "degradado",
+        "Reader detected": "Lector detectado", "Reader not detected": "Lector no detectado", "Physical link": "Enlace físico", "Clean stock is below the safety margin.": "El stock limpio está por debajo del margen de seguridad."
+        ,"Loading hotel...": "Cargando hotel...", "Dashboard refresh failed": "Error al actualizar el panel", "Hotel textile control": "Control de textiles del hotel", "Live item visibility and operational health for the selected hotel.": "Visibilidad de artículos y estado operativo del hotel seleccionado.",
+        "Live monitoring": "Monitoreo en vivo", "LIVE OPERATIONS": "OPERACIONES EN VIVO", "Monitoring center": "Centro de monitoreo", "Follow reader telemetry, linen flow, stock risk and unresolved exceptions from one screen.": "Siga la telemetría, el flujo de ropa, el riesgo de stock y las excepciones desde una sola pantalla.",
+        "Operational pulse": "Pulso operativo", "Readers online": "Lectores en línea", "Pending movements": "Movimientos pendientes", "Reader telemetry": "Telemetría de lectores", "Attention required": "Atención requerida", "Linen flow": "Flujo de ropa", "Auto-refresh every 60 seconds": "Actualización automática cada 60 segundos",
+        "Hotel PAR levels": "Niveles PAR del hotel", "Clean stock": "Stock limpio", "In room": "En habitación", "Soiled": "Sucio", "In wash": "En lavado", "Authenticated session": "Sesión autenticada", "Current hotel": "Hotel actual",
+        "Product inventory": "Inventario de productos", "View registered and available physical products by SKU.": "Vea los productos físicos registrados y disponibles por SKU.", "Unable to load dashboard": "No se pudo cargar el panel"
       },
       tr: {
         "Overview": "Başlangıç", "1. Product preparation": "1. Ürün hazırlama", "2. Inventory": "2. Envanter",
@@ -609,15 +738,69 @@
         "Clear package": "Paketi temizle", "Incoming shipment package": "Gelen sevkiyat paketi",
         "Who did what, and when?": "Kim, ne zaman, ne yaptı?", "Loading activity...": "İşlemler yükleniyor...",
         "Loading shipments...": "Sevkiyatlar yükleniyor...", "Selected operation": "Seçili işletme",
-        "Connecting to operations API": "Operasyon API'sine bağlanıyor", "Checking US RFID standard...": "ABD RFID standardı kontrol ediliyor..."
+        "Connecting to operations API": "Operasyon API'sine bağlanıyor", "Checking US RFID standard...": "ABD RFID standardı kontrol ediliyor...",
+        "Link connected": "Bağlantı açık", "Link disconnected": "Bağlantı kesik", "Telemetry": "Telemetri", "standby": "beklemede", "timeout": "zaman aşımı", "online": "çevrimiçi", "degraded": "sorunlu",
+        "Reader detected": "Okuyucu bulundu", "Reader not detected": "Okuyucu bulunamadı", "Physical link": "Fiziksel bağlantı", "Clean stock is below the safety margin.": "Temiz stok güvenlik seviyesinin altında."
+        ,"Loading hotel...": "Otel yükleniyor...", "Dashboard refresh failed": "Panel yenileme başarısız", "Hotel textile control": "Otel tekstili kontrolü", "Live item visibility and operational health for the selected hotel.": "Seçili otelin ürün görünürlüğü ve operasyonel durumu.",
+        "Live monitoring": "Canlı takip", "LIVE OPERATIONS": "CANLI OPERASYONLAR", "Monitoring center": "İzleme merkezi", "Follow reader telemetry, linen flow, stock risk and unresolved exceptions from one screen.": "Okuyucu telemetrisini, tekstil akışını, stok riskini ve açık istisnaları tek ekrandan takip edin.",
+        "Operational pulse": "Operasyon özeti", "Readers online": "Çevrimiçi okuyucular", "Pending movements": "Bekleyen hareketler", "Reader telemetry": "Okuyucu telemetrisi", "Attention required": "İşlem gerekenler", "Linen flow": "Tekstil akışı", "Auto-refresh every 60 seconds": "Her 60 saniyede otomatik yenileme",
+        "Hotel PAR levels": "Otel PAR seviyeleri", "Clean stock": "Temiz stok", "In room": "Odada", "Soiled": "Kirli", "In wash": "Yıkamada", "Authenticated session": "Doğrulanmış oturum", "Current hotel": "Seçili otel",
+        "Product inventory": "Ürün envanteri", "View registered and available physical products by SKU.": "Kayıtlı ve kullanılabilir fiziksel ürünleri SKU bazında görüntüleyin.", "Unable to load dashboard": "Panel yüklenemedi"
       }
     };
-    let currentLanguage = localStorage.getItem("dashboard-language") || "en";
+    Object.assign(translations.tr, {
+      "Select the product, write or scan tags in bulk, review them, and add them to inventory in one operation.":"Ürünü seçin; etiketleri toplu olarak yazın veya okutun, kontrol edin ve tek işlemde envantere ekleyin.","Remove":"Kaldır","draft":"taslak","approved":"onaylandı","operator":"operatör","EPC conflicts with existing inventory. Resolve before approval.":"EPC mevcut envanterle çakışıyor. Onaydan önce çözün.","extra tag detected. Approval is blocked.":"fazla etiket algılandı. Onay engellendi.","more unique tags required before approval.":"onaydan önce daha fazla benzersiz etiket gerekli.","Batch reconciled. Review and approve it into inventory.":"Parti uzlaştırıldı. Kontrol edip envantere onaylayın.","units are now in inventory.":"ürün artık envanterde.","Approved by":"Onaylayan",
+      "Columns: sku, name, category, units_per_box, boxes_per_pallet, size, color":"Sütunlar: sku, name, category, units_per_box, boxes_per_pallet, size, color","Columns: epc, sku, tid. Each EPC must be unique; grouping remains in the SKU catalog.":"Sütunlar: epc, sku, tid. Her EPC benzersiz olmalıdır; gruplama SKU kataloğunda korunur.","registered":"kayıtlı","products":"ürün","inactive":"pasif","read only":"salt okunur","of":"/",
+      "Units / box":"Kutu içi adet","Boxes / pallet":"Palet içi kutu","Units":"Adet","Pallets":"Palet","Boxes":"Kutu","Loose":"Tekil","Zoho on hand":"Zoho mevcut","Zoho available":"Zoho kullanılabilir","RFID seen":"RFID görülen","Difference":"Fark",
+      "RFID OPERATIONS":"RFID OPERASYONLARI","Hotel textile control":"Otel tekstili kontrolü","All observed EPCs":"Görülen tüm EPC'ler","Active stock":"Aktif stok","Click to resolve":"Çözmek için tıklayın","Awaiting evidence":"Kanıt bekliyor","Offline or degraded":"Çevrimdışı veya sorunlu","Operational attention":"Operasyonel işlem gerekli","Live linen lifecycle":"Canlı tekstil yaşam döngüsü","Physical vs available":"Fiziksel ve kullanılabilir","Allowed hotels":"Yetkili oteller","Chain-wide physical units":"Zincir genelindeki fiziksel ürünler","Loading status distribution...":"Durum dağılımı yükleniyor...","Loading chain totals...":"Zincir toplamları yükleniyor...",
+      "Select a SKU; write or scan RFID tags in bulk and add them to inventory.":"Bir SKU seçin; RFID etiketlerini toplu yazın veya okutun ve envantere ekleyin.","View total products and available stock by SKU.":"Toplam ürünleri ve kullanılabilir stoğu SKU bazında görüntüleyin.","Scan and pack physical products, send them to the hotel, and accept delivery.":"Fiziksel ürünleri okutun, paketleyin, otele gönderin ve teslim alın.",
+      "Live item visibility and operational health for the selected hotel.":"Seçili otelin ürün görünürlüğü ve operasyonel durumu.","Current hotel":"Seçili otel","Current attention":"Güncel işlem kuyruğu","Selected operation":"Seçili operasyon","Not refreshed yet":"Henüz yenilenmedi",
+      "LIVE OPERATIONS":"CANLI OPERASYONLAR","Monitoring center":"İzleme merkezi","Follow reader telemetry, linen flow, stock risk and unresolved exceptions from one screen.":"Okuyucu telemetrisini, tekstil akışını, stok riskini ve açık istisnaları tek ekrandan takip edin.","Operational pulse":"Operasyon özeti","Readers online":"Çevrimiçi okuyucular","Reader telemetry":"Okuyucu telemetrisi","Physical link and heartbeat":"Fiziksel bağlantı ve heartbeat","Attention required":"İşlem gerekenler","Exceptions and alerts":"İstisnalar ve uyarılar","Linen flow":"Tekstil akışı","Clean → room → soiled → wash":"Temiz → oda → kirli → yıkama","Loading reader telemetry...":"Okuyucu telemetrisi yükleniyor...","Loading attention queue...":"İşlem kuyruğu yükleniyor...",
+      "Product catalog setup":"Ürün kataloğu kurulumu","Manual, CSV or external API":"Manuel, CSV veya harici API","Product name":"Ürün adı","Category":"Kategori","Units per box":"Kutu başına adet","Boxes per pallet":"Palet başına kutu","Size":"Ölçü","Color":"Renk","Save product":"Ürünü kaydet","Product CSV":"Ürün CSV dosyası","Import products":"Ürünleri içe aktar","EPC to SKU mapping CSV":"EPC–SKU eşleştirme CSV'si","Register tagged items":"Etiketli ürünleri kaydet","Inventory by product":"Ürün bazında envanter","Zoho product catalog":"Zoho ürün kataloğu","Search products":"Ürün ara","Product status":"Ürün durumu","All products":"Tüm ürünler","Active":"Aktif","Inactive":"Pasif","Loading inventory...":"Envanter yükleniyor...","Loading product catalog...":"Ürün kataloğu yükleniyor...","Loading Zoho products...":"Zoho ürünleri yükleniyor...","Loading Zoho catalog...":"Zoho kataloğu yükleniyor...","Loading products...":"Ürünler yükleniyor...",
+      "RFID reader readiness":"RFID okuyucu hazırlığı","Checking connection":"Bağlantı kontrol ediliyor","Configured connection":"Yapılandırılmış bağlantı","Available operations":"Kullanılabilir işlemler","Safe operating mode":"Güvenli çalışma modu","Hardware actions remain locked until the configured reader is detected.":"Yapılandırılan okuyucu algılanana kadar donanım işlemleri kilitli kalır.","Check connection":"Bağlantıyı kontrol et","Auto-detect / Scan ports":"Otomatik algıla / Portları tara","Checking the configured serial port...":"Yapılandırılmış seri port kontrol ediliyor...","Inventory read · EPC write · read-back verification":"Envanter okuma · EPC yazma · geri okuma doğrulaması",
+      "Skip this step if they already have EPC codes":"Etiketlerde EPC kodu varsa bu adımı atlayın","If the tags have EPC codes, create a product batch below. If they are blank, open the tag-writing area first.":"Etiketlerin EPC kodu varsa aşağıda ürün partisi oluşturun. Boşlarsa önce etiket yazma alanını açın.","1. Select product and target quantity":"1. Ürün ve hedef miktarı seçin","Nothing is added to inventory before approval":"Onaydan önce envantere hiçbir şey eklenmez","Product":"Ürün","Expected quantity":"Beklenen miktar","Order / reference":"Sipariş / referans","Receiving facility":"Teslim tesisi","Receiving zone":"Teslim bölgesi","2. Bulk cart / portal scan":"2. Toplu sepet / portal okuma","100–300 items · unique EPC count":"100–300 ürün · benzersiz EPC sayısı","Open batch":"Açık parti","Scan tags":"Etiketleri okut","Approve into inventory":"Envantere onayla","Create or select an open batch.":"Açık bir parti oluşturun veya seçin.","Expected":"Beklenen","Scanned":"Okunan","Missing":"Eksik","Conflicts / overage":"Çakışma / fazla","Batch history":"Parti geçmişi","Draft and approved receipts":"Taslak ve onaylı kabuller","No tags scanned yet.":"Henüz etiket okutulmadı.","No incoming batches yet.":"Henüz gelen parti yok.",
+      "1. Prepare shipment package":"1. Sevkiyat paketini hazırla","Scan physical products in bulk":"Fiziksel ürünleri toplu okut","Destination hotel":"Hedef otel","The package is empty. Pass the physical products through the reader.":"Paket boş. Fiziksel ürünleri okuyucudan geçirin.","No products scanned yet.":"Henüz ürün okutulmadı.","2. Receive at hotel":"2. Otelde teslim al","Scan, compare, and approve":"Okut, karşılaştır ve onayla","Select an incoming shipment and start receiving.":"Gelen sevkiyatı seçip teslim almayı başlatın.",
+      "Read existing tag":"Mevcut etiketi oku","Read only · no changes":"Salt okunur · değişiklik yok","Safe operation":"Güvenli işlem","Place exactly one tag on the reader. This action only displays its current EPC; it never writes, locks or changes the tag.":"Okuyucuya yalnızca bir etiket yerleştirin. Bu işlem sadece mevcut EPC'yi gösterir; etiketi yazmaz, kilitlemez veya değiştirmez.","No tag has been read yet.":"Henüz etiket okunmadı.","Product and packaging settings":"Ürün ve paketleme ayarları","Used for registration and encoding":"Kayıt ve kodlama için kullanılır","Zoho product":"Zoho ürünü","Manual EPC (optional)":"Manuel EPC (isteğe bağlı)","Register entered EPC":"Girilen EPC'yi kaydet","Production encoding batches":"Üretim kodlama partileri","Persistent queue · multi-writer safe":"Kalıcı kuyruk · çoklu yazıcıya uygun","Verified units required":"Gerekli doğrulanmış adet","Create production batch":"Üretim partisi oluştur","No production batches loaded.":"Üretim partisi yüklenmedi.","Encode new tags":"Yeni etiketleri kodla","Write operation · changes EPC":"Yazma işlemi · EPC'yi değiştirir","Writing changes the tag.":"Yazma işlemi etiketi değiştirir.","Number of items":"Ürün sayısı","Operator instruction":"Operatör talimatı","Write next tag":"Sonraki etiketi yaz",
+      "EXCEPTIONS":"İSTİSNALAR","Attention queue":"İşlem kuyruğu","Unknown, missing and unexpected EPC cases with operational alerts.":"Bilinmeyen, eksik ve beklenmeyen EPC kayıtları ile operasyonel uyarılar.","RFID cases":"RFID kayıtları","Operational alerts":"Operasyonel uyarılar","Loading exceptions...":"İstisnalar yükleniyor...","Loading alerts...":"Uyarılar yükleniyor...","Resolve exception":"İstisnayı çöz","Close":"Kapat",
+      "DEVICES":"CİHAZLAR","Gateway and reader health":"Gateway ve okuyucu durumu","Gateway connectivity, reader state and offline queue depth.":"Gateway bağlantısı, okuyucu durumu ve çevrimdışı kuyruk derinliği.","Live telemetry":"Canlı telemetri","Loading device health...":"Cihaz durumu yükleniyor...","MOVEMENTS":"HAREKETLER","Movement review":"Hareket inceleme","Confidence-gated location changes awaiting evidence.":"Kanıt bekleyen güven kontrollü konum değişiklikleri.","Movement review queue":"Hareket inceleme kuyruğu","Candidate changes":"Aday değişiklikler","Loading movement evidence...":"Hareket kanıtları yükleniyor...",
+      "RECORDS":"KAYITLAR","Product receiving, RFID read/write, and inventory operations.":"Ürün kabulü, RFID okuma/yazma ve envanter işlemleri.","Who did what, and when?":"Kim, ne zaman, ne yaptı?","Integration failures":"Entegrasyon hataları","Dead-letter queue":"Başarısız işlem kuyruğu","Loading integration events...":"Entegrasyon olayları yükleniyor...","ACCESS":"ERİŞİM","Users and hotels":"Kullanıcılar ve oteller","Create accounts, assign roles and control hotel access.":"Hesap oluşturun, rol atayın ve otel erişimini yönetin.","User and hotel access":"Kullanıcı ve otel erişimi","Persistent role assignments":"Kalıcı rol atamaları","Username":"Kullanıcı adı","Display name":"Görünen ad","Password":"Şifre","Role":"Rol","Assigned hotels":"Atanan oteller","Default hotel":"Varsayılan otel","Create user":"Kullanıcı oluştur","Cancel":"İptal","Viewer":"Görüntüleyici","Operator":"Operatör","Hotel admin":"Otel yöneticisi","Chain admin":"Zincir yöneticisi","Loading assigned users...":"Atanmış kullanıcılar yükleniyor..."
+    });
+    Object.assign(translations.es, {
+      "Select the product, write or scan tags in bulk, review them, and add them to inventory in one operation.":"Seleccione el producto; escriba o escanee etiquetas en lote, revíselas y añádalas al inventario en una sola operación.","Remove":"Quitar","draft":"borrador","approved":"aprobado","operator":"operador","EPC conflicts with existing inventory. Resolve before approval.":"EPC entra en conflicto con el inventario. Resuélvalo antes de aprobar.","extra tag detected. Approval is blocked.":"etiqueta adicional detectada. La aprobación está bloqueada.","more unique tags required before approval.":"etiquetas únicas adicionales necesarias antes de aprobar.","Batch reconciled. Review and approve it into inventory.":"Lote conciliado. Revíselo y apruébelo en el inventario.","units are now in inventory.":"unidades ya están en el inventario.","Approved by":"Aprobado por",
+      "Columns: sku, name, category, units_per_box, boxes_per_pallet, size, color":"Columnas: sku, name, category, units_per_box, boxes_per_pallet, size, color","Columns: epc, sku, tid. Each EPC must be unique; grouping remains in the SKU catalog.":"Columnas: epc, sku, tid. Cada EPC debe ser único; la agrupación se mantiene en el catálogo SKU.","registered":"registrados","products":"productos","inactive":"inactivos","read only":"solo lectura","of":"de",
+      "Units / box":"Unidades / caja","Boxes / pallet":"Cajas / palé","Units":"Unidades","Pallets":"Palés","Boxes":"Cajas","Loose":"Sueltas","Zoho on hand":"Existencias Zoho","Zoho available":"Disponible en Zoho","RFID seen":"Visto por RFID","Difference":"Diferencia",
+      "RFID OPERATIONS":"OPERACIONES RFID","Hotel textile control":"Control de textiles del hotel","All observed EPCs":"Todos los EPC observados","Active stock":"Stock activo","Click to resolve":"Haga clic para resolver","Awaiting evidence":"Esperando evidencia","Offline or degraded":"Sin conexión o degradado","Operational attention":"Atención operativa","Live linen lifecycle":"Ciclo de vida en vivo","Physical vs available":"Físico frente a disponible","Allowed hotels":"Hoteles permitidos","Chain-wide physical units":"Unidades físicas de la cadena","Loading status distribution...":"Cargando distribución de estados...","Loading chain totals...":"Cargando totales de la cadena...",
+      "Select a SKU; write or scan RFID tags in bulk and add them to inventory.":"Seleccione un SKU; escriba o escanee etiquetas RFID en lote y añádalas al inventario.","View total products and available stock by SKU.":"Vea los productos totales y el stock disponible por SKU.","Scan and pack physical products, send them to the hotel, and accept delivery.":"Escanee y empaquete productos, envíelos al hotel y acepte la entrega.","Live item visibility and operational health for the selected hotel.":"Visibilidad de artículos y estado operativo del hotel seleccionado.","Current hotel":"Hotel actual","Current attention":"Atención actual","Selected operation":"Operación seleccionada","Not refreshed yet":"Aún no actualizado",
+      "Product catalog setup":"Configuración del catálogo","Manual, CSV or external API":"Manual, CSV o API externa","Product name":"Nombre del producto","Category":"Categoría","Units per box":"Unidades por caja","Boxes per pallet":"Cajas por palé","Size":"Tamaño","Color":"Color","Save product":"Guardar producto","Product CSV":"CSV de productos","Import products":"Importar productos","EPC to SKU mapping CSV":"CSV de relación EPC–SKU","Register tagged items":"Registrar artículos etiquetados","Inventory by product":"Inventario por producto","Zoho product catalog":"Catálogo de Zoho","Search products":"Buscar productos","Product status":"Estado del producto","All products":"Todos los productos","Active":"Activo","Inactive":"Inactivo","Loading inventory...":"Cargando inventario...","Loading product catalog...":"Cargando catálogo...","Loading Zoho products...":"Cargando productos de Zoho...","Loading Zoho catalog...":"Cargando catálogo de Zoho...","Loading products...":"Cargando productos...",
+      "RFID reader readiness":"Preparación del lector RFID","Checking connection":"Comprobando conexión","Configured connection":"Conexión configurada","Available operations":"Operaciones disponibles","Safe operating mode":"Modo seguro","Hardware actions remain locked until the configured reader is detected.":"Las acciones quedan bloqueadas hasta detectar el lector configurado.","Check connection":"Comprobar conexión","Auto-detect / Scan ports":"Detectar automáticamente / Escanear puertos","Checking the configured serial port...":"Comprobando el puerto serie configurado...","Inventory read · EPC write · read-back verification":"Lectura de inventario · escritura EPC · verificación de lectura",
+      "1. Select product and target quantity":"1. Seleccione producto y cantidad","Nothing is added to inventory before approval":"Nada se añade antes de la aprobación","Product":"Producto","Expected quantity":"Cantidad esperada","Order / reference":"Pedido / referencia","Receiving facility":"Instalación receptora","Receiving zone":"Zona receptora","2. Bulk cart / portal scan":"2. Escaneo masivo de carro / portal","100–300 items · unique EPC count":"100–300 artículos · EPC únicos","Open batch":"Lote abierto","Scan tags":"Escanear etiquetas","Approve into inventory":"Aprobar en inventario","Create or select an open batch.":"Cree o seleccione un lote abierto.","Expected":"Esperado","Scanned":"Escaneado","Missing":"Faltante","Conflicts / overage":"Conflictos / exceso","Batch history":"Historial de lotes","Draft and approved receipts":"Recepciones provisionales y aprobadas","No tags scanned yet.":"Aún no se han escaneado etiquetas.","No incoming batches yet.":"Aún no hay lotes entrantes.",
+      "EXCEPTIONS":"EXCEPCIONES","Attention queue":"Cola de atención","Unknown, missing and unexpected EPC cases with operational alerts.":"Casos EPC desconocidos, faltantes e inesperados con alertas operativas.","RFID cases":"Casos RFID","Operational alerts":"Alertas operativas","Loading exceptions...":"Cargando excepciones...","Loading alerts...":"Cargando alertas...","Resolve exception":"Resolver excepción","Close":"Cerrar","DEVICES":"DISPOSITIVOS","Gateway and reader health":"Estado del gateway y lectores","Gateway connectivity, reader state and offline queue depth.":"Conectividad del gateway, estado del lector y cola sin conexión.","Live telemetry":"Telemetría en vivo","Loading device health...":"Cargando estado de dispositivos...","MOVEMENTS":"MOVIMIENTOS","Movement review":"Revisión de movimientos","Confidence-gated location changes awaiting evidence.":"Cambios de ubicación pendientes de evidencia.","Movement review queue":"Cola de revisión","Candidate changes":"Cambios candidatos","Loading movement evidence...":"Cargando evidencia de movimientos...",
+      "RECORDS":"REGISTROS","Product receiving, RFID read/write, and inventory operations.":"Recepción de productos, lectura/escritura RFID y operaciones de inventario.","Integration failures":"Fallos de integración","Dead-letter queue":"Cola de fallos","Loading integration events...":"Cargando eventos de integración...","ACCESS":"ACCESO","Users and hotels":"Usuarios y hoteles","Create accounts, assign roles and control hotel access.":"Cree cuentas, asigne roles y controle el acceso a hoteles.","User and hotel access":"Acceso de usuarios y hoteles","Persistent role assignments":"Asignaciones persistentes","Username":"Usuario","Display name":"Nombre visible","Password":"Contraseña","Role":"Rol","Assigned hotels":"Hoteles asignados","Default hotel":"Hotel predeterminado","Create user":"Crear usuario","Cancel":"Cancelar","Viewer":"Lector","Operator":"Operador","Hotel admin":"Administrador de hotel","Chain admin":"Administrador de cadena","Loading assigned users...":"Cargando usuarios asignados..."
+    });
+    Object.assign(translations.tr, {"Exceptions":"İstisnalar","Operational data current":"Operasyon verileri güncel","Last refreshed":"Son yenileme","connected":"bağlı","disconnected":"bağlı değil","critical":"kritik","warning":"uyarı","info":"bilgi","Reader offline":"Okuyucu çevrimdışı","Unknown RFID tags detected":"Bilinmeyen RFID etiketleri algılandı","not seen 30 days":"30 gündür görülmedi","unknown asset":"bilinmeyen ürün","shipment missing":"sevkiyatta eksik","shipment unexpected":"sevkiyatta beklenmeyen","wash threshold":"yıkama sınırı","timeout":"zaman aşımı"});
+    Object.assign(translations.es, {"Exceptions":"Excepciones","Operational data current":"Datos operativos actualizados","Last refreshed":"Última actualización","connected":"conectado","disconnected":"desconectado","critical":"crítico","warning":"advertencia","info":"información","Reader offline":"Lector sin conexión","Unknown RFID tags detected":"Etiquetas RFID desconocidas detectadas","not seen 30 days":"no visto durante 30 días","unknown asset":"artículo desconocido","shipment missing":"faltante en envío","shipment unexpected":"inesperado en envío","wash threshold":"límite de lavados","timeout":"tiempo agotado"});
+    Object.assign(translations.tr, {"Product tracking":"Ürün takibi","SKU · lifecycle · location":"SKU · yaşam döngüsü · konum","Search product":"Ürün ara","Search by SKU or product name":"SKU veya ürün adına göre ara","Select product":"Ürün seç","Loading products...":"Ürünler yükleniyor...","Loading RFID product positions...":"RFID ürün konumları yükleniyor...","products available":"ürün bulundu","Total tagged":"Toplam etiketli","In room":"Odada","Soiled":"Kirli","In wash":"Yıkamada","Other / unlocated":"Diğer / konumsuz","Location distribution":"Konum dağılımı","Facility":"Tesis","Zone":"Bölge","Lifecycle":"Yaşam döngüsü","Quantity":"Miktar","Share":"Pay","Not observed yet":"Henüz konum görülmedi","No tagged units registered for this product.":"Bu ürün için kayıtlı RFID etiketli birim yok.","Inspection required":"Kontrol gerekli","Maximum wash count":"En yüksek yıkama sayısı"});
+    Object.assign(translations.es, {"Product tracking":"Seguimiento de productos","SKU · lifecycle · location":"SKU · ciclo de vida · ubicación","Search product":"Buscar producto","Search by SKU or product name":"Buscar por SKU o nombre del producto","Select product":"Seleccionar producto","Loading products...":"Cargando productos...","Loading RFID product positions...":"Cargando ubicaciones RFID...","products available":"productos disponibles","Total tagged":"Total etiquetado","In room":"En habitación","Soiled":"Sucio","In wash":"En lavado","Other / unlocated":"Otro / sin ubicación","Location distribution":"Distribución por ubicación","Facility":"Instalación","Zone":"Zona","Lifecycle":"Ciclo de vida","Quantity":"Cantidad","Share":"Proporción","Not observed yet":"Aún no observado","No tagged units registered for this product.":"No hay unidades RFID registradas para este producto.","Inspection required":"Inspección requerida","Maximum wash count":"Máximo de lavados"});
+    Object.assign(translations.tr, {
+      "Management requirements audit":"Yönetim talepleri kontrolü","Automatic software and runtime check":"Otomatik yazılım ve çalışma zamanı kontrolü","Checking requested features...":"İstenen özellikler kontrol ediliyor...",
+      "UTF-8 encoding":"UTF-8 karakter kodlaması","Database/API/browser encoding is declared as UTF-8.":"Veritabanı, API ve tarayıcı karakter kodlaması UTF-8 olarak tanımlı.","Complete localization":"Eksiksiz yerelleştirme","Static and dynamic interface text uses the language layer.":"Statik ve dinamik arayüz metinleri dil katmanını kullanıyor.","Reader state separation":"Okuyucu durumlarının ayrılması","Physical connection and telemetry heartbeat are reported separately.":"Fiziksel bağlantı ve telemetri heartbeat durumu ayrı gösteriliyor.","Automatic port detection":"Otomatik port algılama","Port scan control and hardware endpoint are available.":"Port tarama kontrolü ve donanım uç noktası hazır.","Wash life tracking":"Yıkama ömrü takibi","Clean-return increments wash count and flags 60+ washes.":"Temiz dönüş wash_count değerini artırıyor ve 60+ yıkamada kontrol işareti koyuyor.","Four-stage PAR monitoring":"Dört aşamalı PAR takibi","Clean, room, soiled and wash stages are reported with safety margin alerts.":"Temiz, oda, kirli ve yıkama aşamaları güvenlik stoğu uyarısıyla izleniyor.","Bulk portal reconciliation":"Toplu portal uzlaştırması","Expected, scanned, missing and conflict counts are available with a chime.":"Beklenen, okunan, eksik ve çakışan sayıları sesli doğrulamayla gösteriliyor.","Closed-loop exceptions":"Kapalı döngü istisna yönetimi","Reassign, misplaced and quarantine/bill actions are available.":"Yeniden ata, yanlış konum ve karantina/faturalandırma işlemleri hazır.","30-day not-seen control":"30 günlük görülmeme kontrolü","Assets not observed for 30 days are automatically flagged.":"30 gün görülmeyen ürünler otomatik işaretleniyor.","Physical reader validation":"Fiziksel okuyucu doğrulaması","Reader detected and ready for hardware operations.":"Okuyucu algılandı ve donanım işlemlerine hazır.","Software is ready; the configured reader is not physically detected.":"Yazılım hazır; yapılandırılan okuyucu fiziksel olarak algılanmadı."
+    });
+    Object.assign(translations.es, {
+      "Management requirements audit":"Auditoría de requisitos","Automatic software and runtime check":"Comprobación automática de software y ejecución","Checking requested features...":"Comprobando funciones solicitadas...","UTF-8 encoding":"Codificación UTF-8","Database/API/browser encoding is declared as UTF-8.":"La codificación de base de datos, API y navegador está definida como UTF-8.","Complete localization":"Localización completa","Static and dynamic interface text uses the language layer.":"Los textos estáticos y dinámicos usan la capa de idioma.","Reader state separation":"Separación de estados del lector","Physical connection and telemetry heartbeat are reported separately.":"La conexión física y el heartbeat se muestran por separado.","Automatic port detection":"Detección automática de puertos","Port scan control and hardware endpoint are available.":"El escaneo de puertos y el endpoint de hardware están disponibles.","Wash life tracking":"Seguimiento de vida de lavado","Clean-return increments wash count and flags 60+ washes.":"El retorno limpio incrementa lavados y marca 60+ ciclos.","Four-stage PAR monitoring":"Control PAR de cuatro etapas","Clean, room, soiled and wash stages are reported with safety margin alerts.":"Se controlan limpio, habitación, sucio y lavado con alertas de margen.","Bulk portal reconciliation":"Conciliación masiva de portal","Expected, scanned, missing and conflict counts are available with a chime.":"Se muestran esperados, escaneados, faltantes y conflictos con sonido.","Closed-loop exceptions":"Gestión cerrada de excepciones","Reassign, misplaced and quarantine/bill actions are available.":"Están disponibles reasignar, mal ubicado y cuarentena/facturación.","30-day not-seen control":"Control de 30 días sin ver","Assets not observed for 30 days are automatically flagged.":"Los activos no vistos durante 30 días se marcan automáticamente.","Physical reader validation":"Validación del lector físico","Reader detected and ready for hardware operations.":"Lector detectado y listo para operaciones.","Software is ready; the configured reader is not physically detected.":"El software está listo; el lector configurado no se detecta físicamente."
+    });
+    Object.assign(translations.tr, {
+      "Skip this step if they already have EPC codes":"EPC kodları zaten varsa bu adımı atlayın","1. Prepare shipment package":"1. Sevkiyat paketini hazırla","Scan physical products in bulk":"Fiziksel ürünleri toplu okut","Destination hotel":"Hedef otel","2. Receive at hotel":"2. Otelde teslim al","Scan, compare, and approve":"Okut, karşılaştır ve onayla","Incoming shipment package":"Gelen sevkiyat paketi","Read existing tag":"Mevcut etiketi oku","Read only · no changes":"Salt okunur · değişiklik yok","Product and packaging settings":"Ürün ve paketleme ayarları","Production encoding batches":"Üretim kodlama partileri","Encode new tags":"Yeni etiketleri kodla","Selected product":"Seçili ürün","The product selected above will be queued for encoding.":"Yukarıda seçilen ürün kodlama kuyruğuna alınır.","Confirm the selected product, keep exactly one blank tag on the writer and remove it after every successful result.":"Seçili ürünü doğrulayın, yazıcıda yalnızca bir boş etiket bulundurun ve her başarılı sonuçtan sonra etiketi kaldırın.","I confirm that exactly one blank, unlocked test tag is on the writer and that changing its EPC is intended.":"Yazıcıda yalnızca bir boş ve kilitsiz test etiketi olduğunu ve EPC değişikliğinin bilinçli yapıldığını onaylıyorum.","Select the product above, enter quantity and place one blank tag on the writer.":"Yukarıdan ürünü seçin, miktarı girin ve yazıcıya bir boş etiket yerleştirin.","Activity history":"İşlem geçmişi","Loading activity...":"İşlemler yükleniyor...","Reader":"Okuyucu","Telemetry":"Telemetri","Adapter":"Adaptör","Queue":"Kuyruk","Last read":"Son okuma","Heartbeat":"Heartbeat","Error":"Hata","Level":"Seviye","Alert":"Uyarı","Entity":"Kayıt","Last seen":"Son görülme","Issue":"Sorun","Type":"Tür","Shipment":"Sevkiyat","Action":"İşlem","Status":"Durum","Created":"Oluşturulma","Date":"Tarih","User":"Kullanıcı","Attempts":"Deneme","Reference":"Referans","Direction":"Yön","Destination":"Hedef","Tagged units":"Etiketli ürün","Received":"Teslim alınan","Reads":"Okuma","Current":"Mevcut","Candidate":"Aday","Observed":"Gözlem zamanı","Connected":"Bağlı","Disconnected":"Bağlı değil","No Gateway heartbeat has been received yet.":"Henüz Gateway heartbeat alınmadı.","No active operational alerts.":"Aktif operasyonel uyarı yok.","No active exceptions or alerts.":"Aktif istisna veya uyarı yok.","No movements are waiting for additional reader evidence.":"Ek okuyucu kanıtı bekleyen hareket yok.","No open RFID exceptions. Receiving and inventory are clear.":"Açık RFID istisnası yok. Teslim ve envanter temiz.","Refreshing operational data":"Operasyon verileri yenileniyor"
+    });
+    Object.assign(translations.es, {
+      "Are the tags blank?":"¿Las etiquetas están vacías?","Skip this step if they already have EPC codes":"Omita este paso si ya tienen códigos EPC","Open tag writing":"Abrir escritura de etiquetas","1. Prepare shipment package":"1. Preparar paquete de envío","Scan physical products in bulk":"Escanear productos físicos en lote","Destination hotel":"Hotel de destino","2. Receive at hotel":"2. Recibir en el hotel","Scan, compare, and approve":"Escanear, comparar y aprobar","Incoming shipment package":"Paquete entrante","Read existing tag":"Leer etiqueta existente","Read only · no changes":"Solo lectura · sin cambios","Product and packaging settings":"Configuración de producto y embalaje","Production encoding batches":"Lotes de codificación","Encode new tags":"Codificar etiquetas nuevas","Selected product":"Producto seleccionado","The product selected above will be queued for encoding.":"El producto seleccionado se añadirá a la cola de codificación.","Activity history":"Historial de actividad","Reader":"Lector","Telemetry":"Telemetría","Adapter":"Adaptador","Queue":"Cola","Last read":"Última lectura","Heartbeat":"Heartbeat","Error":"Error","Level":"Nivel","Alert":"Alerta","Entity":"Entidad","Last seen":"Última vez visto","Issue":"Incidencia","Type":"Tipo","Shipment":"Envío","Action":"Acción","Status":"Estado","Created":"Creado","Date":"Fecha","User":"Usuario","Attempts":"Intentos","Reference":"Referencia","Direction":"Dirección","Destination":"Destino","Tagged units":"Unidades etiquetadas","Received":"Recibido","Reads":"Lecturas","Current":"Actual","Candidate":"Candidato","Observed":"Observado","Connected":"Conectado","Disconnected":"Desconectado","No Gateway heartbeat has been received yet.":"Aún no se ha recibido ningún heartbeat del gateway.","No active operational alerts.":"No hay alertas operativas activas.","No active exceptions or alerts.":"No hay excepciones ni alertas activas.","No movements are waiting for additional reader evidence.":"No hay movimientos esperando evidencia adicional.","No open RFID exceptions. Receiving and inventory are clear.":"No hay excepciones RFID abiertas.","Refreshing operational data":"Actualizando datos operativos"
+    });
+    let currentLanguage = "en";
     if (!translations[currentLanguage] && currentLanguage !== "en") currentLanguage = "en";
+    const uiText = key => currentLanguage === "en" ? key : (translations[currentLanguage]?.[key] || key);
     const sourceText = new WeakMap();
     const renderedText = new WeakMap();
     function translateTextNode(node) {
-      if (!node.nodeValue?.trim() || node.parentElement?.closest("script,style,option")) return;
+      if (!node.nodeValue?.trim() || node.parentElement?.closest("script,style")) return;
       if (!sourceText.has(node) || (renderedText.has(node) && node.nodeValue !== renderedText.get(node))) {
         sourceText.set(node, node.nodeValue);
       }
@@ -647,23 +830,31 @@
     document.querySelector("#language-select").addEventListener("change", event => {
       currentLanguage = event.target.value;
       localStorage.setItem("dashboard-language", currentLanguage);
+      date = createDateFormatter();
       applyLanguage();
+      if (currentIdentity) load().catch(showError);
     });
     applyLanguage();
     languageObserver.observe(document.body, { subtree: true, childList: true, characterData: true });
 
-    const date = new Intl.DateTimeFormat(currentLanguage === "tr" ? "tr-TR" : currentLanguage === "es" ? "es-ES" : "en-GB", {
+    const createDateFormatter = () => new Intl.DateTimeFormat(currentLanguage === "tr" ? "tr-TR" : currentLanguage === "es" ? "es-ES" : "en-GB", {
       day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"
     });
+    let date = createDateFormatter();
     const ids = [
       "inventory-content", "status-content", "exception-content", "alert-content",
-      "health-content", "movement-content", "delivery-content", "audit-content", "integration-content"
+      "health-content", "movement-content", "delivery-content", "audit-content", "integration-content",
+      "monitor-health", "monitor-attention"
     ];
-    const routes = new Set(["overview", "inventory", "receiving", "deliveries", "exceptions", "devices", "movements", "activity", "users"]);
+    const routes = new Set(["overview", "monitoring", "inventory", "receiving", "deliveries", "exceptions", "devices", "movements", "activity", "users"]);
 
     function routeFromPath() {
       const segment = location.pathname.replace(/^\/dashboard\/?/, "").split("/")[0];
       return routes.has(segment) ? segment : "overview";
+    }
+    function setMobileNavigation(open) {
+      document.body.classList.toggle("nav-open", open);
+      document.querySelector("#mobile-menu").setAttribute("aria-expanded", String(open));
     }
     function showRoute(route, { push = false } = {}) {
       let resolved = routes.has(route) ? route : "overview";
@@ -690,7 +881,13 @@
         const path = resolved === "overview" ? "/dashboard" : `/dashboard/${resolved}`;
         history.pushState({ route: resolved }, "", `${path}${location.search}`);
       }
-      document.title = `${resolved[0].toUpperCase()}${resolved.slice(1)} · Globaltex RFID`;
+      const routeTitle = {
+        en: { overview:"Overview", monitoring:"Monitoring", inventory:"Inventory", receiving:"Product preparation", deliveries:"Shipping & receiving", exceptions:"Exceptions", devices:"Reader health", movements:"Movements", activity:"Activity history", users:"Users & access" },
+        tr: { overview:"Başlangıç", monitoring:"Canlı takip", inventory:"Envanter", receiving:"Ürün hazırlama", deliveries:"Sevkiyat ve teslim", exceptions:"İstisnalar", devices:"Okuyucu durumu", movements:"Hareketler", activity:"İşlem geçmişi", users:"Kullanıcılar ve erişim" },
+        es: { overview:"Resumen", monitoring:"Monitoreo", inventory:"Inventario", receiving:"Preparación de productos", deliveries:"Envío y recepción", exceptions:"Excepciones", devices:"Estado de lectores", movements:"Movimientos", activity:"Historial de actividad", users:"Usuarios y acceso" }
+      };
+      document.title = `${routeTitle[currentLanguage]?.[resolved] || resolved} · Globaltex RFID`;
+      setMobileNavigation(false);
       scrollTo({ top: 0, behavior: "auto" });
     }
 
@@ -705,7 +902,7 @@
       return Number.isNaN(parsed.getTime()) ? escapeHtml(value) : date.format(parsed);
     }
     function badge(value) {
-      const safe = escapeHtml(value || "unknown");
+      const safe = escapeHtml(uiText(value || "unknown"));
       const className = String(value || "").toLowerCase().replace(/[^a-z_]/g, "");
       return `<span class="badge ${className}">${safe}</span>`;
     }
@@ -716,6 +913,9 @@
       return { headers: { "x-tenant-id": tenantId } };
     }
     async function request(path, options) {
+      if (location.protocol === "file:") {
+        throw new Error("STATIC_FILE_MODE");
+      }
       const response = await fetch(path, options);
       if (response.status === 401) {
         location.replace("/login");
@@ -728,14 +928,14 @@
       return response.json();
     }
     function setTenant(identity) {
-      document.querySelector("#tenant-name").textContent = identity.tenantId;
+      document.querySelector("#tenant-name").textContent = currentHotelNames.get(identity.tenantId) || identity.tenantId;
       document.querySelector("#identity").textContent =
         `${identity.actorId} · ${identity.role.replaceAll("_", " ")}`;
       const select = document.querySelector("#tenant-select");
       if (identity.tenantIds.length > 1) {
         select.hidden = false;
         select.innerHTML = identity.tenantIds.map(tenant =>
-          `<option value="${escapeHtml(tenant)}"${tenant === identity.tenantId ? " selected" : ""}>${escapeHtml(tenant)}</option>`
+          `<option value="${escapeHtml(tenant)}"${tenant === identity.tenantId ? " selected" : ""}>${escapeHtml(currentHotelNames.get(tenant) || tenant)}</option>`
         ).join("");
         select.onchange = () => {
           const query = new URLSearchParams(location.search);
@@ -774,9 +974,9 @@
         return;
       }
       const rows = data.lines.map(line => `<tr>
-        <td class="mono" data-label="SKU">${escapeHtml(line.sku)}</td><td data-label="Product">${escapeHtml(line.name)}</td>
-        <td data-label="Units"><strong>${number.format(line.units)}</strong></td><td data-label="Pallets">${number.format(line.fullPallets)}</td>
-        <td data-label="Boxes">${number.format(line.fullBoxes)}</td><td data-label="Loose">${number.format(line.looseUnits)}</td>
+        <td class="mono" data-label="SKU">${escapeHtml(line.sku)}</td><td data-label="${uiText("Product")}">${escapeHtml(line.name)}</td>
+        <td data-label="${uiText("Units")}"><strong>${number.format(line.units)}</strong></td><td data-label="${uiText("Pallets")}">${number.format(line.fullPallets)}</td>
+        <td data-label="${uiText("Boxes")}">${number.format(line.fullBoxes)}</td><td data-label="${uiText("Loose")}">${number.format(line.looseUnits)}</td>
       </tr>`);
       document.querySelector("#inventory-content").innerHTML =
         table(["SKU", "Product", "Units", "Pallets", "Boxes", "Loose"], rows, "inventory-responsive inventory-table");
@@ -805,7 +1005,7 @@
         content.innerHTML = '<div class="empty">Run npm run zoho:mapping-report to refresh the Zoho catalog.</div>';
         return;
       }
-      caption.textContent = `${number.format(data.products.length)} RFID-eligible products Â· read only`;
+      caption.textContent = `${number.format(data.products.length)} RFID-eligible ${uiText("products")} · ${uiText("read only")}`;
       if (!data.products.length) {
         content.innerHTML = '<div class="empty">No RFID-eligible Zoho products were found.</div>';
         return;
@@ -813,10 +1013,10 @@
       zohoCatalogData = data;
       zohoCatalogRfidSummary = rfidSummary;
       const inactiveCount = data.products.filter(product => product.status === "inactive").length;
-      caption.textContent = `${number.format(data.products.length)} products · ${number.format(inactiveCount)} inactive · read only`;
+      caption.textContent = `${number.format(data.products.length)} ${uiText("products")} · ${number.format(inactiveCount)} ${uiText("inactive")} · ${uiText("read only")}`;
       zohoProducts = data.products.filter(product => product.status !== "inactive" && product.eligible !== false);
       document.querySelector("#encoding-product").innerHTML = zohoProducts.map(product =>
-        `<option value="${escapeHtml(product.sku)}">${escapeHtml(product.sku)} Â· ${escapeHtml(product.name)}</option>`
+        `<option value="${escapeHtml(product.sku)}">${escapeHtml(product.sku)} · ${escapeHtml(product.name)}</option>`
       ).join("");
       refreshEncodingProducts();
       const rfidBySku = new Map((rfidSummary.lines || []).map(line => [String(line.sku).toUpperCase(), line.units]));
@@ -828,7 +1028,7 @@
         return (status === "all" || productStatus === status) && (!query || haystack.includes(query));
       });
       document.querySelector("#zoho-catalog-results").textContent =
-        `${number.format(filteredProducts.length)} of ${number.format(data.products.length)} products`;
+        `${number.format(filteredProducts.length)} ${uiText("of")} ${number.format(data.products.length)} ${uiText("products")}`;
       if (!filteredProducts.length) {
         content.innerHTML = '<div class="empty">No products match this search and status filter.</div>';
         return;
@@ -838,11 +1038,11 @@
         const difference = rfidUnits - product.zohoStockOnHand;
         return `<tr>
         <td class="mono" data-label="SKU">${escapeHtml(product.sku)}</td>
-        <td data-label="Product">${escapeHtml(product.name)} ${badge(product.status === "inactive" ? "inactive" : "active")}</td>
-        <td data-label="Zoho on hand"><strong>${number.format(product.zohoStockOnHand)}</strong></td>
-        <td data-label="Zoho available">${number.format(product.zohoAvailableStock)}</td>
-        <td data-label="RFID seen"><strong>${number.format(rfidUnits)}</strong></td>
-        <td data-label="Difference">${number.format(difference)}</td>
+        <td data-label="${uiText("Product")}">${escapeHtml(product.name)} ${badge(product.status === "inactive" ? "inactive" : "active")}</td>
+        <td data-label="${uiText("Zoho on hand")}"><strong>${number.format(product.zohoStockOnHand)}</strong></td>
+        <td data-label="${uiText("Zoho available")}">${number.format(product.zohoAvailableStock)}</td>
+        <td data-label="${uiText("RFID seen")}"><strong>${number.format(rfidUnits)}</strong></td>
+        <td data-label="${uiText("Difference")}">${number.format(difference)}</td>
       </tr>`;
       });
       content.innerHTML = table(["SKU", "Product", "Zoho on hand", "Zoho available", "RFID seen", "Difference"], rows, "inventory-responsive zoho-table");
@@ -872,7 +1072,7 @@
     function receivingProductOptions() {
       const products = currentCatalogProducts.filter(product => product.active !== false);
       return products.map(product =>
-        `<option value="${escapeHtml(product.sku)}">${escapeHtml(product.sku)} Â· ${escapeHtml(product.name)}</option>`
+        `<option value="${escapeHtml(product.sku)}">${escapeHtml(product.sku)} · ${escapeHtml(product.name)}</option>`
       ).join("") || '<option value="">Add a product to the catalog first</option>';
     }
     function refreshReceivingZones() {
@@ -899,21 +1099,21 @@
       const message = document.querySelector("#receiving-batch-message");
       if (!batch) message.textContent = "Create or select an open batch.";
       else if (batch.status === "approved") message.textContent =
-        `Approved by ${batch.approvedBy || "operator"}. ${number.format(scanned)} units are now in inventory.`;
+        `${uiText("Approved by")} ${batch.approvedBy || uiText("operator")}. ${number.format(scanned)} ${uiText("units are now in inventory.")}`;
       else if (batch.conflictEpcs.length) message.textContent =
-        `${batch.conflictEpcs.length} EPC conflicts with existing inventory. Resolve before approval.`;
+        `${batch.conflictEpcs.length} ${uiText("EPC conflicts with existing inventory. Resolve before approval.")}`;
       else if (batch.overageQuantity) message.textContent =
-        `${batch.overageQuantity} extra tag detected. Approval is blocked.`;
+        `${batch.overageQuantity} ${uiText("extra tag detected. Approval is blocked.")}`;
       else if (batch.remainingQuantity) message.textContent =
-        `${number.format(batch.remainingQuantity)} more unique tags required before approval.`;
-      else message.textContent = "Batch reconciled. Review and approve it into inventory.";
+        `${number.format(batch.remainingQuantity)} ${uiText("more unique tags required before approval.")}`;
+      else message.textContent = uiText("Batch reconciled. Review and approve it into inventory.");
       const tags = batch?.tags ?? [];
       document.querySelector("#receiving-batch-tags").innerHTML = tags.length
         ? table(["EPC", "Reads", "Last seen", "Action"], tags.slice(-100).map(tag => `<tr>
             <td class="mono" data-label="EPC">${escapeHtml(tag.epc)}</td>
-            <td data-label="Reads">${number.format(tag.readCount)}</td>
-            <td data-label="Last seen">${formatDate(tag.lastSeenAt)}</td>
-            <td data-label="Action">${batch.status === "draft" ? `<button class="mini-button" type="button" data-remove-receiving-epc="${escapeHtml(tag.epc)}">Remove</button>` : "â€”"}</td>
+            <td data-label="${uiText("Reads")}">${number.format(tag.readCount)}</td>
+            <td data-label="${uiText("Last seen")}">${formatDate(tag.lastSeenAt)}</td>
+            <td data-label="${uiText("Action")}">${batch.status === "draft" ? `<button class="mini-button" type="button" data-remove-receiving-epc="${escapeHtml(tag.epc)}">${uiText("Remove")}</button>` : "—"}</td>
           </tr>`), "inventory-responsive")
         : '<div class="empty">No tags scanned yet.</div>';
     }
@@ -929,7 +1129,7 @@
       const select = document.querySelector("#receiving-batch-select");
       select.innerHTML = currentReceivingBatches.map(batch => {
         const product = currentCatalogProducts.find(item => item.sku === batch.sku);
-        return `<option value="${escapeHtml(batch.batchId)}">${escapeHtml(batch.reference || batch.batchId.slice(0, 8))} Â· ${escapeHtml(product?.name || batch.sku)} Â· ${escapeHtml(batch.status)}</option>`;
+        return `<option value="${escapeHtml(batch.batchId)}">${escapeHtml(batch.reference || batch.batchId.slice(0, 8))} · ${escapeHtml(product?.name || batch.sku)} · ${escapeHtml(uiText(batch.status))}</option>`;
       }).join("") || '<option value="">No batches yet</option>';
       const preferred = currentReceivingBatches.find(batch => batch.batchId === selectedBefore) ||
         currentReceivingBatches.find(batch => batch.status === "draft") || currentReceivingBatches[0];
@@ -937,15 +1137,16 @@
       renderReceivingBatch(preferred ?? null);
       const historyRows = currentReceivingBatches.map(batch => {
         const product = currentCatalogProducts.find(item => item.sku === batch.sku);
-        return `<tr><td data-label="Reference">${escapeHtml(batch.reference || "â€”")}</td><td data-label="Product">${escapeHtml(product?.name || batch.sku)}</td>` +
-          `<td data-label="Expected">${number.format(batch.expectedQuantity)}</td><td data-label="Scanned">${number.format(batch.scannedQuantity)}</td>` +
-          `<td data-label="Status">${badge(batch.status)}</td><td data-label="Created">${formatDate(batch.createdAt)}</td></tr>`;
+        return `<tr><td data-label="${uiText("Reference")}">${escapeHtml(batch.reference || "—")}</td><td data-label="${uiText("Product")}">${escapeHtml(product?.name || batch.sku)}</td>` +
+          `<td data-label="${uiText("Expected")}">${number.format(batch.expectedQuantity)}</td><td data-label="${uiText("Scanned")}">${number.format(batch.scannedQuantity)}</td>` +
+          `<td data-label="${uiText("Status")}">${badge(batch.status)}</td><td data-label="${uiText("Created")}">${formatDate(batch.createdAt)}</td></tr>`;
       });
       document.querySelector("#receiving-batch-history").innerHTML = historyRows.length
         ? table(["Reference", "Product", "Expected", "Scanned", "Status", "Created"], historyRows, "inventory-responsive")
         : '<div class="empty">No incoming batches yet.</div>';
     }
     function renderExceptions(items) {
+      currentExceptions = items;
       if (!items.length) {
         document.querySelector("#exception-content").innerHTML =
           '<div class="empty">No open RFID exceptions. Receiving and inventory are clear.</div>';
@@ -954,10 +1155,10 @@
       const rows = items.map(item => `<tr>
         <td>${badge(item.severity)}</td><td>${escapeHtml(item.exceptionType.replaceAll("_", " "))}</td>
         <td class="mono">${escapeHtml(item.epc || "—")}</td><td>${escapeHtml(item.shipmentId || "—")}</td>
-        <td>${formatDate(item.lastSeenAt)}</td>
+        <td>${formatDate(item.lastSeenAt)}</td><td><button class="mini-button" type="button" data-resolve-exception="${escapeHtml(item.caseId)}">Resolve</button></td>
       </tr>`);
       document.querySelector("#exception-content").innerHTML =
-        table(["Level", "Type", "EPC", "Shipment", "Last seen"], rows);
+        table(["Level", "Type", "EPC", "Shipment", "Last seen", "Action"], rows);
     }
     function renderAlerts(items) {
       if (!items.length) {
@@ -979,13 +1180,13 @@
         return;
       }
       const rows = items.map(item => `<tr>
-        <td><strong>${escapeHtml(item.readerId)}</strong></td><td>${badge(item.status)}</td>
+        <td><strong>${escapeHtml(item.readerId)}</strong></td><td>${badge(item.status === "offline" && item.readerConnected ? "timeout" : item.status)}</td>
         <td>${escapeHtml(item.adapter)}</td><td>${item.readerConnected ? "Connected" : "Disconnected"}</td>
         <td>${number.format(item.queueDepth)}</td><td>${formatDate(item.lastReadAt)}</td>
         <td>${formatDate(item.receivedAt)}</td><td>${escapeHtml(item.lastError || "—")}</td>
       </tr>`);
       document.querySelector("#health-content").innerHTML =
-        table(["Reader", "Status", "Adapter", "Link", "Queue", "Last read", "Heartbeat", "Error"], rows);
+        table(["Reader", "Telemetry", "Adapter", "Physical link", "Queue", "Last read", "Heartbeat", "Error"], rows);
     }
     function renderMovements(items) {
       if (!items.length) {
@@ -1003,8 +1204,114 @@
       document.querySelector("#movement-content").innerHTML =
         table(["EPC", "Current", "Candidate", "Reads", "Reason", "Observed"], rows);
     }
+    function renderMonitoring({ health, exceptions, alerts, movements, linen }) {
+      const online = health.filter(item => item.status === "online").length;
+      document.querySelector("#monitor-readers").textContent = `${online}/${health.length}`;
+      document.querySelector("#monitor-exceptions").textContent = number.format(exceptions.length);
+      document.querySelector("#monitor-movements").textContent = number.format(movements.length);
+      document.querySelector("#monitor-clean").textContent = number.format(linen.stages.clean);
+      const healthRows = health.map(item => `<tr><td><strong>${escapeHtml(item.readerId)}</strong></td><td>${item.readerConnected ? badge("connected") : badge("disconnected")}</td><td>${badge(item.status === "offline" && item.readerConnected ? "timeout" : item.status)}</td><td>${formatDate(item.receivedAt)}</td></tr>`);
+      document.querySelector("#monitor-health").innerHTML = healthRows.length
+        ? table(["Reader", "Physical link", "Telemetry", "Heartbeat"], healthRows)
+        : '<div class="empty">No Gateway heartbeat has been received yet.</div>';
+      const attention = [
+        ...exceptions.map(item => ({ level: item.severity, text: item.exceptionType.replaceAll("_", " "), entity: item.epc || item.shipmentId, time: item.lastSeenAt })),
+        ...alerts.map(item => ({ level: item.severity, text: item.title, entity: item.entityId, time: item.lastSeenAt }))
+      ].sort((a, b) => String(b.time).localeCompare(String(a.time))).slice(0, 20);
+      document.querySelector("#monitor-attention").innerHTML = attention.length
+        ? table(["Level", "Issue", "Entity", "Last seen"], attention.map(item => `<tr><td>${badge(item.level)}</td><td>${escapeHtml(item.text)}</td><td class="mono">${escapeHtml(item.entity || "—")}</td><td>${formatDate(item.time)}</td></tr>`))
+        : '<div class="empty">No active exceptions or alerts.</div>';
+      document.querySelector("#monitor-refresh-state").textContent = `${uiText("Auto-refresh every 60 seconds")} · ${date.format(new Date())}`;
+    }
+
+    function productLifecycle(asset) {
+      const zone = currentZones.find(item => item.zoneId === asset.zoneId);
+      const signal = `${zone?.zoneType || ""} ${zone?.name || ""} ${asset.status || ""}`.toLowerCase();
+      if (/soiled|dirty|hamper|kirli/.test(signal)) return "soiled";
+      if (/wash|laundry|yıkama/.test(signal)) return "wash";
+      if (/room|assigned|guest|oda/.test(signal)) return "room";
+      if (/clean|stock|storage|available|receiving|temiz/.test(signal)) return "clean";
+      return "other";
+    }
+
+    function renderSelectedProductTracker() {
+      const select = document.querySelector("#tracker-product");
+      const selected = trackerProducts.find(product => product.sku === select.value);
+      const content = document.querySelector("#tracker-detail");
+      if (!selected) {
+        content.innerHTML = `<div class="empty">${escapeHtml(uiText("No tagged units registered for this product."))}</div>`;
+        return;
+      }
+      const selectedAssets = currentAssets.filter(asset => String(asset.sku).toUpperCase() === selected.key);
+      const counts = { clean:0, room:0, soiled:0, wash:0, other:0 };
+      const groups = new Map();
+      const facilityMap = new Map(currentFacilities.map(item => [item.facilityId, item.name]));
+      const zoneMap = new Map(currentZones.map(item => [item.zoneId, item]));
+      for (const asset of selectedAssets) {
+        const lifecycle = productLifecycle(asset);
+        counts[lifecycle] += 1;
+        const locationKey = `${asset.facilityId || ""}|${asset.zoneId || ""}|${lifecycle}`;
+        if (!groups.has(locationKey)) groups.set(locationKey, {
+          facility: facilityMap.get(asset.facilityId) || asset.facilityId || uiText("Not observed yet"),
+          zone: zoneMap.get(asset.zoneId)?.name || asset.zoneId || uiText("Not observed yet"),
+          lifecycle,
+          quantity:0
+        });
+        groups.get(locationKey).quantity += 1;
+      }
+      const lifecycleLabels = { clean:"Clean stock", room:"In room", soiled:"Soiled", wash:"In wash", other:"Other / unlocated" };
+      const summaryCards = [
+        ["Total tagged", selectedAssets.length], ["Clean stock", counts.clean], ["In room", counts.room],
+        ["Soiled", counts.soiled], ["In wash", counts.wash], ["Other / unlocated", counts.other]
+      ].map(([label, value]) => `<div class="tracker-stat"><span>${escapeHtml(uiText(label))}</span><strong>${number.format(value)}</strong></div>`).join("");
+      const inspectionCount = selectedAssets.filter(asset => asset.inspectionRequired || Number(asset.washCount || 0) >= 60).length;
+      const maxWash = selectedAssets.reduce((maximum, asset) => Math.max(maximum, Number(asset.washCount || 0)), 0);
+      const rows = [...groups.values()].sort((a, b) => b.quantity - a.quantity).map(group => `<tr>
+        <td data-label="${uiText("Facility")}">${escapeHtml(group.facility)}</td>
+        <td data-label="${uiText("Zone")}">${escapeHtml(group.zone)}</td>
+        <td data-label="${uiText("Lifecycle")}">${badge(uiText(lifecycleLabels[group.lifecycle]))}</td>
+        <td data-label="${uiText("Quantity")}"><strong>${number.format(group.quantity)}</strong></td>
+        <td data-label="${uiText("Share")}">${selectedAssets.length ? number.format(group.quantity / selectedAssets.length * 100) : 0}%</td>
+      </tr>`);
+      content.innerHTML = `<div class="tracker-summary">${summaryCards}</div>
+        <div class="tracker-meta"><span><strong>${escapeHtml(selected.sku)}</strong> · ${escapeHtml(selected.name)}</span><span>${escapeHtml(uiText("Inspection required"))}: <strong>${number.format(inspectionCount)}</strong></span><span>${escapeHtml(uiText("Maximum wash count"))}: <strong>${number.format(maxWash)}</strong></span></div>
+        <h3 class="tracker-location-title">${escapeHtml(uiText("Location distribution"))}</h3>
+        ${rows.length ? table(["Facility", "Zone", "Lifecycle", "Quantity", "Share"], rows, "inventory-responsive") : `<div class="empty">${escapeHtml(uiText("No tagged units registered for this product."))}</div>`}`;
+    }
+
+    function filterProductTracker() {
+      const select = document.querySelector("#tracker-product");
+      const previous = select.value;
+      const query = document.querySelector("#tracker-search").value.trim().toLocaleLowerCase();
+      const filtered = trackerProducts.filter(product => !query || `${product.sku} ${product.name}`.toLocaleLowerCase().includes(query));
+      select.innerHTML = filtered.map(product => `<option value="${escapeHtml(product.sku)}">${escapeHtml(product.sku)} · ${escapeHtml(product.name)} (${number.format(product.tagged)})</option>`).join("");
+      if (filtered.some(product => product.sku === previous)) select.value = previous;
+      document.querySelector("#tracker-result-count").textContent = `${number.format(filtered.length)} ${uiText("products available")}`;
+      renderSelectedProductTracker();
+    }
+
+    function renderProductTracker(catalogProducts, zohoCatalog, summaryLines, assets) {
+      currentAssets = assets || [];
+      document.querySelector("#tracker-search").placeholder = uiText("Search by SKU or product name");
+      const bySku = new Map();
+      for (const product of [...(catalogProducts || []), ...(zohoCatalog || []), ...(summaryLines || [])]) {
+        if (!product?.sku) continue;
+        const key = String(product.sku).toUpperCase();
+        const existing = bySku.get(key);
+        bySku.set(key, { key, sku:String(product.sku), name:product.name || existing?.name || String(product.sku), tagged:existing?.tagged || 0 });
+      }
+      for (const asset of currentAssets) {
+        if (!asset?.sku) continue;
+        const key = String(asset.sku).toUpperCase();
+        const product = bySku.get(key) || { key, sku:String(asset.sku), name:String(asset.sku), tagged:0 };
+        product.tagged += 1;
+        bySku.set(key, product);
+      }
+      trackerProducts = [...bySku.values()].sort((a, b) => (b.tagged - a.tagged) || a.name.localeCompare(b.name));
+      filterProductTracker();
+    }
     function renderDeliveries(items, tenantId) {
-      document.querySelector("#delivery-caption").textContent = `${tenantId} Â· ${number.format(items.length)} deliveries`;
+      document.querySelector("#delivery-caption").textContent = `${tenantId} · ${number.format(items.length)} deliveries`;
       if (!items.length) {
         document.querySelector("#delivery-content").innerHTML =
           '<div class="empty">No RFID-tagged deliveries have been assigned to this hotel yet.</div>';
@@ -1033,6 +1340,35 @@
         `<option value="${escapeHtml(facility.facilityId)}">${escapeHtml(facility.name)}</option>`
       ).join("") || '<option value="">No receiving facility configured</option>';
     }
+    async function configureLinkedRequest() {
+      const query = new URLSearchParams(location.search);
+      const requestId = query.get("requestId"), hotel = query.get("requestHotel");
+      const note = document.querySelector("#linked-request-note");
+      linkedStockRequest = null;
+      if (!requestId || !hotel) { note.hidden = true; return; }
+      const data = await request("/v1/admin/stock", tenantOptions(hotel));
+      const item = data.requests.find(r => r.requestId === requestId);
+      if (!item) throw new Error("The stock request could not be found in this hotel.");
+      note.hidden = false;
+      if (item.status !== "approved") {
+        note.innerHTML = `This request is ${escapeHtml(item.status)}. <a href="/dashboard/control#stock">Return to stock requests</a>.`;
+        document.querySelector("#shipment-submit").disabled = true;
+        return;
+      }
+      linkedStockRequest = { ...item, customerTenantId: hotel };
+      const select = document.querySelector("#shipment-hotel");
+      select.value = hotel;
+      select.disabled = true;
+      await loadDestinationFacilities();
+      if (item.dispatch) document.querySelector("#shipment-facility").value = item.dispatch.destinationFacilityId;
+      document.querySelector("#shipment-reference").value = `Stock request ${requestId.slice(0, 8)}`;
+      const available = currentAssets.filter(a => a.sku === item.sku && a.assetStatus === "active").length;
+      note.innerHTML = `<strong>Replenishment: ${escapeHtml(item.sku)} · ${number.format(item.quantity)} items requested</strong><br>` +
+        `Scan exactly ${number.format(item.quantity)} available items of this product. Other products are excluded. ` +
+        `Source inventory: ${number.format(available)} available. ${available < item.quantity ? 'Prepare more tagged stock before dispatching. ' : ''}` +
+        '<a href="/dashboard/control#stock">Return to requests</a>.';
+      renderOutgoingPackage();
+    }
     function renderOutgoingPackage() {
       const assetsByEpc = new Map(currentAssets.map(asset => [asset.epc, asset]));
       const groups = new Map();
@@ -1060,6 +1396,21 @@
         : "The package is empty. Pass the physical products through the reader.";
       document.querySelector("#shipment-clear").disabled = !outgoingPackageEpcs.size;
       document.querySelector("#shipment-submit").disabled = !outgoingPackageEpcs.size;
+      if (linkedStockRequest) {
+        document.querySelector("#shipment-package-status").textContent =
+          `${number.format(outgoingPackageEpcs.size)} / ${number.format(linkedStockRequest.quantity)} required ${linkedStockRequest.sku} items scanned.`;
+        document.querySelector("#shipment-submit").disabled = outgoingPackageEpcs.size !== linkedStockRequest.quantity;
+      }
+    }
+    function renderAdminNextSteps(overview, health, unknownCount) {
+      const submitted = overview?.requests.filter(r => r.status === "submitted").length;
+      const approved = overview?.requests.filter(r => r.status === "approved").length;
+      const pending = overview?.shipments.filter(s => s.status !== "received").length;
+      const readerIssues = health.filter(r => r.status !== "online").length;
+      document.querySelector("#admin-next-steps").innerHTML =
+        `<a class="workflow-step" href="/dashboard/control#stock"><strong>${submitted == null ? 'Open hotel requests' : `${submitted} ${submitted===1?'request':'requests'} to review`}</strong><p>${approved == null ? 'Request overview could not be loaded. Open the list to retry.' : `${approved} approved requests to prepare. Review → approve → scan and send.`}</p></a>` +
+        `<a class="workflow-step" href="/dashboard/control#stock"><strong>${pending == null ? 'Open deliveries' : `${pending} deliveries awaiting receipt`}</strong><p>Open a delivery and verify receiving. Linked requests close automatically after full receipt.</p></a>` +
+        `<a class="workflow-step" href="/dashboard/control#devices"><strong>${readerIssues} reader issues · ${unknownCount} unknown tags</strong><p>Check device connections before scanning. Review unknown tags in Exceptions.</p></a>`;
     }
     function configureDeliveryWorkflows(identity, shipments, assets, summary) {
       currentShipments = shipments;
@@ -1067,7 +1418,7 @@
       const hotelSelect = document.querySelector("#shipment-hotel");
       const destinations = identity.tenantIds.filter(tenant => tenant !== identity.tenantId);
       hotelSelect.innerHTML = destinations.map(tenant =>
-        `<option value="${escapeHtml(tenant)}">${escapeHtml(tenant)}</option>`
+        `<option value="${escapeHtml(tenant)}">${escapeHtml(currentHotelNames.get(tenant) || tenant)}</option>`
       ).join("") || '<option value="">No customer hotel configured</option>';
       hotelSelect.onchange = () => loadDestinationFacilities().catch(showError);
       if (identity.role === "chain_admin") loadDestinationFacilities().catch(showError);
@@ -1081,6 +1432,8 @@
       document.querySelector("#receiving-shipment").innerHTML = incoming.map(item =>
         `<option value="${escapeHtml(item.shipmentId)}">${escapeHtml(item.reference || item.shipmentId)} · ${number.format(item.assetCount)} tagged units</option>`
       ).join("") || '<option value="">No delivery waiting for acceptance</option>';
+      const requestedShipment = new URLSearchParams(location.search).get("shipmentId");
+      if (incoming.some(s => s.shipmentId === requestedShipment)) document.querySelector("#receiving-shipment").value = requestedShipment;
       if (!incoming.length) {
         document.querySelector("#receiving-start").disabled = true;
         document.querySelector("#receiving-progress").textContent = "No incoming shipment is waiting for acceptance.";
@@ -1197,18 +1550,22 @@
     }
 
     let currentIdentity = null;
+    let currentHotelNames = new Map();
     let zohoProducts = [];
     let zohoCatalogData = null;
     let zohoCatalogRfidSummary = null;
     let currentCatalogProducts = [];
     let currentAssets = [];
+    let trackerProducts = [];
     let currentProductNames = new Map();
     let outgoingPackageEpcs = new Set();
+    let linkedStockRequest = null;
     let currentShipments = [];
     let currentFacilities = [];
     let currentZones = [];
     let currentReceivingBatches = [];
     let currentRfidHardware = null;
+    let currentExceptions = [];
     let activeReceivingSession = null;
     let batchTarget = 0;
     let batchCompleted = 0;
@@ -1220,7 +1577,8 @@
       const detected = Boolean(status?.detected);
       const state = document.querySelector("#rfid-hardware-state");
       state.className = `badge ${detected ? "online" : "offline"}`;
-      state.textContent = detected ? "Reader ready" : "Reader unavailable";
+      const telemetry = status?.telemetryState || "standby";
+      state.textContent = detected ? `${uiText("Link connected")} · ${uiText("Telemetry")} ${uiText(telemetry)}` : uiText("Link disconnected");
       document.querySelector("#rfid-port").textContent =
         `${status?.configuredPort || "Not configured"} · ${number.format(status?.baudRate || 0)} baud`;
       document.querySelector("#rfid-capabilities").textContent =
@@ -1229,12 +1587,44 @@
           : "Capability information unavailable";
       const message = document.querySelector("#rfid-hardware-message");
       message.className = `hardware-message${detected ? " ready" : ""}`;
-      message.textContent = status?.message || "Reader status could not be determined.";
+      message.textContent = detected
+        ? `${uiText("Reader detected")} · ${status.configuredPort} · ${uiText("Telemetry")} ${uiText(telemetry)}`
+        : `${uiText("Reader not detected")} · ${status?.configuredPort || "—"}`;
       ["#receiving-batch-scan", "#encoding-read", "#batch-next", "#shipment-scan"].forEach(selector => {
         document.querySelector(selector).disabled = !detected;
       });
       const receivingScan = document.querySelector("#receiving-scan");
       if (!detected) receivingScan.disabled = true;
+    }
+
+    function renderLinenOperations(data) {
+      document.querySelector("#par-clean").textContent = number.format(data.stages.clean);
+      document.querySelector("#par-room").textContent = number.format(data.stages.inRoom);
+      document.querySelector("#par-soiled").textContent = number.format(data.stages.soiled);
+      document.querySelector("#par-wash").textContent = number.format(data.stages.inWash);
+      const warning = document.querySelector("#par-warning");
+      warning.hidden = !data.cleanLow;
+      warning.textContent = `${uiText("Clean stock is below the safety margin.")} ${data.stages.clean}/${data.safetyMargin}`;
+    }
+
+    function verificationChime(success = true) {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return;
+      const audio = new AudioContextClass();
+      const oscillator = audio.createOscillator();
+      const gain = audio.createGain();
+      oscillator.frequency.value = success ? 880 : 220;
+      gain.gain.setValueAtTime(.08, audio.currentTime);
+      gain.gain.exponentialRampToValueAtTime(.001, audio.currentTime + .16);
+      oscillator.connect(gain).connect(audio.destination);
+      oscillator.start(); oscillator.stop(audio.currentTime + .16);
+    }
+
+    function openExceptionDialog(caseId = currentExceptions[0]?.caseId) {
+      const item = currentExceptions.find(entry => entry.caseId === caseId);
+      const content = document.querySelector("#exception-dialog-content");
+      content.innerHTML = item ? `<p><strong>${escapeHtml(item.exceptionType.replaceAll("_", " "))}</strong><br><span class="mono">${escapeHtml(item.epc || "—")}</span></p><div class="form-actions"><button class="button" data-exception-action="reassigned_property" data-case-id="${escapeHtml(item.caseId)}">Reassign property</button><button class="button" data-exception-action="misplaced" data-case-id="${escapeHtml(item.caseId)}">Mark as misplaced</button><button class="button danger" data-exception-action="quarantine_bill" data-case-id="${escapeHtml(item.caseId)}">Quarantine & bill</button></div>` : '<div class="empty">No open exception selected.</div>';
+      document.querySelector("#exception-dialog").showModal();
     }
 
     function assertRfidHardware() {
@@ -1259,7 +1649,7 @@
       const assigned = selectedUserTenants();
       const select = document.querySelector("#user-default");
       select.innerHTML = assigned.map(tenant =>
-        `<option value="${escapeHtml(tenant)}"${tenant === preferred ? " selected" : ""}>${escapeHtml(tenant)}</option>`
+        `<option value="${escapeHtml(tenant)}"${tenant === preferred ? " selected" : ""}>${escapeHtml(currentHotelNames.get(tenant) || tenant)}</option>`
       ).join("");
     }
     function resetUserForm() {
@@ -1350,7 +1740,7 @@
     }
 
     async function load() {
-      document.querySelector("#sync-state").textContent = "Refreshing operational data";
+      document.querySelector("#sync-state").textContent = uiText("Refreshing operational data");
       const queryTenant = new URLSearchParams(location.search).get("tenantId");
       const initialOptions = queryTenant ? tenantOptions(queryTenant) : {};
       const identity = await request("/v1/admin/me", initialOptions);
@@ -1380,12 +1770,18 @@
         ,request("/v1/admin/encoding/batches", options)
         ,request("/v1/admin/standards/profile", options)
         ,request("/v1/admin/hardware/rru9809/status", options)
+        ,request("/v1/admin/linen-operations?safetyMargin=20", options)
       ];
       if (identity.role === "chain_admin") {
         requests.push(request("/v1/admin/chain/summary", options));
+        requests.push(request("/v1/admin/stock/overview", options).catch(() => null));
+        requests.push(request("/v1/admin/hotels", options).catch(() => ({ hotels: [] })));
       }
-      const [summary, movements, health, audit, integrations, alerts, exceptions, shipments, zohoCatalog, assets, facilities, zones, catalog, receivingBatches, encodingBatches, standards, hardware, chain] =
+      const [summary, movements, health, audit, integrations, alerts, exceptions, shipments, zohoCatalog, assets, facilities, zones, catalog, receivingBatches, encodingBatches, standards, hardware, linen, chain, stockOverview, hotelDirectory] =
         await Promise.all(requests);
+      currentHotelNames = new Map((hotelDirectory?.hotels ?? []).map(h => [h.tenantId, h.name]));
+      setTenant(identity);
+      renderAdminNextSteps(stockOverview, health.readers, summary.unknownUnits);
       currentFacilities = facilities.facilities;
       currentZones = zones.zones;
       const activeAlerts = alerts.alerts.filter(item => item.status !== "resolved");
@@ -1396,24 +1792,34 @@
       document.querySelector("#reader-issues").textContent =
         number.format(health.readers.filter(item => item.status !== "online").length);
       document.querySelector("#active-alerts").textContent = number.format(activeAlerts.length);
+      const standardsCopy = {
+        en: standards.companyPrefixConfigured ? "US standard active" : "US-standard-ready operating mode",
+        es: standards.companyPrefixConfigured ? "Estándar de EE. UU. activo" : "Modo preparado para el estándar de EE. UU.",
+        tr: standards.companyPrefixConfigured ? "ABD standardı aktif" : "ABD standardına hazır çalışma modu"
+      };
+      const prefixCopy = currentLanguage === "tr" ? "GS1 firma öneki girilene kadar mevcut EPC'ler korunur" : currentLanguage === "es" ? "Los EPC actuales se conservan hasta configurar el prefijo GS1" : "Existing EPCs remain unchanged until a GS1 company prefix is configured";
       document.querySelector("#standards-note").textContent = standards.companyPrefixConfigured
-        ? `ABD standardı aktif · ${standards.airInterface} · ${standards.itemScheme} · ${standards.eventStandard}`
-        : `ABD standardına hazır çalışma modu · ${standards.airInterface} · GS1 firma öneki girilene kadar mevcut EPC'ler korunur`;
+        ? `${standardsCopy[currentLanguage]} · ${standards.airInterface} · ${standards.itemScheme} · ${standards.eventStandard}`
+        : `${standardsCopy[currentLanguage]} · ${standards.airInterface} · ${prefixCopy}`;
       document.querySelector("#inventory-caption").textContent =
-        `${identity.tenantId} · ${number.format(summary.registeredUnits)} registered`;
+        `${identity.tenantId} · ${number.format(summary.registeredUnits)} ${uiText("registered")}`;
       renderInventory(summary);
       renderCatalog(catalog.products);
       renderReceivingBatches(receivingBatches.batches);
       renderZohoCatalog(zohoCatalog, summary);
+      renderProductTracker(catalog.products, zohoCatalog.products, summary.lines, assets.assets);
       renderEncodingBatches(encodingBatches.batches);
       renderRfidHardware(hardware);
+      renderLinenOperations(linen);
       renderStatus(summary);
       renderExceptions(exceptions.exceptions);
       renderAlerts(activeAlerts);
       renderHealth(health.readers);
       renderMovements(movements.pendingMovements);
+      renderMonitoring({ health: health.readers, exceptions: exceptions.exceptions, alerts: activeAlerts, movements: movements.pendingMovements, linen });
       renderDeliveries(shipments.shipments, identity.tenantId);
       configureDeliveryWorkflows(identity, shipments.shipments, assets.assets, summary);
+      await configureLinkedRequest();
       renderAudit(audit.events);
       renderIntegrations(integrations.events);
       if (chain) {
@@ -1426,16 +1832,39 @@
       }
       if (["hotel_admin", "chain_admin"].includes(identity.role)) await loadUsers();
       const now = new Date();
-      document.querySelector("#sync-state").textContent = `Operational data current · ${date.format(now)}`;
-      document.querySelector("#updated-at").textContent = `Last refreshed ${date.format(now)}`;
+      document.querySelector("#sync-state").textContent = `${uiText("Operational data current")} · ${date.format(now)}`;
+      document.querySelector("#updated-at").textContent = `${uiText("Last refreshed")} ${date.format(now)}`;
     }
 
     function showError(error) {
-      const message = `<div class="error">Unable to load dashboard: ${escapeHtml(error.message)}</div>`;
+      const fileMode = error.message === "STATIC_FILE_MODE" || location.protocol === "file:";
+      const detail = fileMode
+        ? "This dashboard cannot run as a local HTML file. Start the API with npm run start:api, then open http://127.0.0.1:8080/dashboard."
+        : error.message === "Failed to fetch"
+          ? "The operations API is not reachable. Start or restart the API, then refresh this page."
+          : error.message;
+      const message = `<div class="error">${escapeHtml(uiText("Unable to load dashboard"))}: ${escapeHtml(detail)}</div>`;
       ids.forEach(id => { document.querySelector(`#${id}`).innerHTML = message; });
-      document.querySelector("#sync-state").textContent = "Dashboard refresh failed";
+      document.querySelector("#tenant-name").textContent = fileMode ? "API not connected" : "Connection unavailable";
+      document.querySelector("#sync-state").textContent = uiText("Dashboard refresh failed");
+      if (fileMode) {
+        document.querySelector(".brand-logo").src = "./assets/globaltex-logo.png";
+        const warning = document.querySelector("#runtime-warning");
+        warning.hidden = false;
+        warning.innerHTML = `This file was opened directly from disk. Run <code>npm run start:api</code> in the RFID folder and open <code>http://127.0.0.1:8080/dashboard</code>.`;
+      }
     }
     document.querySelector("#refresh").addEventListener("click", () => load().catch(showError));
+    document.querySelector("#mobile-menu").addEventListener("click", event => {
+      setMobileNavigation(event.currentTarget.getAttribute("aria-expanded") !== "true");
+    });
+    document.querySelector("#nav-backdrop").addEventListener("click", () => setMobileNavigation(false));
+    addEventListener("keydown", event => {
+      if (event.key === "Escape") setMobileNavigation(false);
+    });
+    addEventListener("resize", () => {
+      if (innerWidth > 920) setMobileNavigation(false);
+    });
     document.querySelector("#toggle-encoding-tools").addEventListener("click", event => {
       const tools = document.querySelector("#encoding-tools");
       tools.hidden = !tools.hidden;
@@ -1490,6 +1919,7 @@
         renderReceivingBatches(currentReceivingBatches);
         document.querySelector("#receiving-batch-select").value = batchId;
         renderReceivingBatch(result.batch);
+        verificationChime(Boolean(result.detectedQuantity));
         if (!result.detectedQuantity) message.textContent = "No tag detected. Reposition the tags and scan again.";
       } catch (error) {
         message.textContent = error.message;
@@ -1537,6 +1967,8 @@
     document.querySelector("#zoho-catalog-status").addEventListener("change", () => {
       if (zohoCatalogData && zohoCatalogRfidSummary) renderZohoCatalog(zohoCatalogData, zohoCatalogRfidSummary);
     });
+    document.querySelector("#tracker-search").addEventListener("input", filterProductTracker);
+    document.querySelector("#tracker-product").addEventListener("change", renderSelectedProductTracker);
     document.querySelectorAll("[data-route]").forEach(link => {
       link.addEventListener("click", event => {
         event.preventDefault();
@@ -1558,6 +1990,43 @@
         button.disabled = false;
         button.textContent = "Check connection";
       }
+    });
+    document.querySelector("#rfid-auto-detect").addEventListener("click", async event => {
+      const button = event.currentTarget;
+      const message = document.querySelector("#rfid-hardware-message");
+      button.disabled = true;
+      try {
+        const result = await request("/v1/admin/hardware/rru9809/detect", {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-tenant-id": currentIdentity.tenantId },
+          body: "{}"
+        });
+        message.textContent = result.detected
+          ? `Recommended port: ${result.recommendedPort} · ${result.baudRate} baud. ${result.availablePorts.length} port(s) found.`
+          : "No serial ports were found. Connect the reader and install its USB/serial driver.";
+        message.className = `hardware-message${result.detected ? " ready" : ""}`;
+      } catch (error) { message.textContent = error.message; }
+      finally { button.disabled = false; }
+    });
+    document.querySelector("#open-exceptions").addEventListener("click", () => openExceptionDialog());
+    document.querySelector("#close-exceptions").addEventListener("click", () => document.querySelector("#exception-dialog").close());
+    document.querySelector("#exception-content").addEventListener("click", event => {
+      const button = event.target.closest("[data-resolve-exception]");
+      if (button) openExceptionDialog(button.dataset.resolveException);
+    });
+    document.querySelector("#exception-dialog-content").addEventListener("click", async event => {
+      const button = event.target.closest("[data-exception-action]");
+      if (!button) return;
+      button.disabled = true;
+      try {
+        await request(`/v1/admin/exceptions/${encodeURIComponent(button.dataset.caseId)}/resolve`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-tenant-id": currentIdentity.tenantId },
+          body: JSON.stringify({ resolution: button.dataset.exceptionAction })
+        });
+        document.querySelector("#exception-dialog").close();
+        await load();
+      } catch (error) { button.disabled = false; alert(error.message); }
     });
     document.querySelector("#logout").addEventListener("click", async () => {
       await fetch("/v1/auth/logout", { method: "POST" });
@@ -1760,7 +2229,7 @@
         const detected = [...new Set((result.reads || []).map(read => read.epc))];
         const accepted = detected.filter(epc => {
           const asset = inventoryByEpc.get(epc);
-          return asset && asset.assetStatus === "active";
+          return asset && asset.assetStatus === "active" && (!linkedStockRequest || asset.sku === linkedStockRequest.sku);
         });
         const rejected = detected.length - accepted.length;
         const before = outgoingPackageEpcs.size;
@@ -1789,19 +2258,24 @@
       const message = document.querySelector("#shipment-message");
       try {
         const epcs = [...outgoingPackageEpcs];
+        if (new URLSearchParams(location.search).has("requestId") && !linkedStockRequest) throw new Error("This request is no longer ready for dispatch. Return to stock requests.");
         if (!epcs.length) throw new Error("Scan the physical products before creating a shipment.");
         const reference = document.querySelector("#shipment-reference").value.trim();
-        const result = await request("/v1/admin/shipments", {
+        const linked = linkedStockRequest;
+        const path = linked ? `/v1/admin/stock/requests/${encodeURIComponent(linked.requestId)}/dispatch` : "/v1/admin/shipments";
+        const result = await request(path, {
           method: "POST",
-          headers: { "content-type": "application/json", "x-tenant-id": currentIdentity.tenantId },
+          headers: { "content-type": "application/json", "x-tenant-id": linked ? linked.customerTenantId : currentIdentity.tenantId },
           body: JSON.stringify({
             shipmentId: `shipment-${Date.now()}`,
+            supplierTenantId: currentIdentity.tenantId,
             customerTenantId: document.querySelector("#shipment-hotel").value,
             destinationFacilityId: document.querySelector("#shipment-facility").value,
             reference,
             epcs
           })
         });
+        if (linked) { location.href = "/dashboard/control#stock"; return; }
         message.textContent = `${result.reference || result.shipmentId} is ready to ship with ${number.format(result.assetCount)} products.`;
         outgoingPackageEpcs.clear();
         document.querySelector("#shipment-form").reset();
@@ -1917,8 +2391,11 @@
         message.textContent = error.message;
       }
     });
-    load().catch(showError);
-    setInterval(() => load().catch(showError), 60000);
+    if (location.protocol === "file:") showError(new Error("STATIC_FILE_MODE"));
+    else {
+      load().catch(showError);
+      setInterval(() => load().catch(showError), 60000);
+    }
   </script>
 </body>
 </html>

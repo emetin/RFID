@@ -85,6 +85,11 @@ CREATE TABLE IF NOT EXISTS rfid_assets (
   tid TEXT,
   status TEXT NOT NULL DEFAULT 'active',
   encoded_at TEXT,
+  wash_count INTEGER NOT NULL DEFAULT 0 CHECK (wash_count >= 0),
+  use_count INTEGER NOT NULL DEFAULT 0 CHECK (use_count >= 0),
+  cycle_phase TEXT NOT NULL DEFAULT 'clean',
+  inspection_required INTEGER NOT NULL DEFAULT 0,
+  last_clean_return_at TEXT,
   PRIMARY KEY (tenant_id, epc),
   FOREIGN KEY (tenant_id, sku) REFERENCES products (tenant_id, sku)
 );
@@ -425,3 +430,7 @@ CREATE INDEX IF NOT EXISTS operational_alerts_status_idx
   ON operational_alerts (tenant_id, status, severity, last_seen_at DESC);
 CREATE INDEX IF NOT EXISTS exception_cases_status_idx
   ON exception_cases (tenant_id, status, severity, last_seen_at DESC);
+CREATE TABLE IF NOT EXISTS hotel_operations (
+  tenant_id TEXT PRIMARY KEY,
+  document TEXT NOT NULL
+);

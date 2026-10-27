@@ -1,3 +1,4 @@
+import { nextLinenCycle } from "./linen-cycle.js";
 import { randomUUID } from "node:crypto";
 import { calculatePackaging } from "./packaging.js";
 import { gatewayStatus } from "./gateway-health.js";
@@ -25,6 +26,45 @@ export class PostgresStore {
   async readinessCheck() {
     const health = await this.#database.healthCheck();
     return { status: "ready", store: "postgres", latencyMs: health.latencyMs };
+  }
+
+  async operationsFor(tenantId) {
+    return this.#database.systemTransaction(async (client) => {
+      await client.query("SET LOCAL ROLE globaltex_app");
+      await client.query("SELECT set_config('app.hotel_slug', $1, true)", [tenantId]);
+      const { rows } = await client.query("SELECT document FROM hotel_operations WHERE tenant_slug = $1", [tenantId]);
+      return rows[0]?.document ?? { hotels: [], policies: [], requests: [] };
+    });
+  }
+
+  async productUsage(tenantId, sku) {
+    const tenant=await this.#tenant(tenantId);
+    return this.#database.tenantTransaction(tenant,async client=>{
+      const {rows}=await client.query(`SELECT
+        (SELECT COUNT(*)::int FROM rfid_assets a JOIN products p ON p.id=a.product_id WHERE a.tenant_id=$1 AND p.sku=$2 AND a.status <> 'retired') AS registered,
+        (SELECT COUNT(*)::int FROM encoding_jobs j JOIN encoding_batches b ON b.id=j.batch_id JOIN products p ON p.id=b.product_id WHERE j.tenant_id=$1 AND p.sku=$2 AND j.status IN ('queued','leased')) AS encoding,
+        (SELECT COUNT(*)::int FROM receiving_batches b JOIN products p ON p.id=b.product_id WHERE b.tenant_id=$1 AND p.sku=$2 AND b.status='draft') AS receiving`,[tenant,sku]);
+      return rows[0];
+    });
+  }
+
+  async operationsTenantIds() {
+    return this.#database.systemTransaction(async (client) =>
+      (await client.query("SELECT tenant_slug FROM hotel_operations")).rows.map((r) => r.tenant_slug));
+  }
+
+  async updateOperations(tenantId, update) {
+    return this.#database.systemTransaction(async (client) => {
+      await client.query("SET LOCAL ROLE globaltex_app");
+      await client.query("SELECT set_config('app.hotel_slug', $1, true)", [tenantId]);
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`hotel-operations:${tenantId}`]);
+      const { rows } = await client.query("SELECT document FROM hotel_operations WHERE tenant_slug = $1", [tenantId]);
+      const state = rows[0]?.document ?? { hotels: [], policies: [], requests: [] };
+      const result = update(state);
+      await client.query(`INSERT INTO hotel_operations (tenant_slug, document) VALUES ($1, $2::jsonb)
+        ON CONFLICT (tenant_slug) DO UPDATE SET document = excluded.document`, [tenantId, JSON.stringify(state)]);
+      return result;
+    });
   }
 
   async createAdminUser({
@@ -344,7 +384,7 @@ export class PostgresStore {
         ? { valid: false, reason: "reader_not_provisioned" }
         : { valid: true, reason: "legacy_unprovisioned_reader" };
     }
-    if (!reader.active) return { valid: false, reason: "reader_or_location_inactive" };
+    if (!reader.active || !(await this.facilitiesFor(tenantId)).some(f=>f.facilityId===reader.facilityId&&f.active) || !(await this.zonesFor(tenantId)).some(z=>z.zoneId===reader.zoneId&&z.active)) return { valid: false, reason: "reader_or_location_inactive" };
     if (facilityId != null && reader.facilityId !== facilityId) {
       return { valid: false, reason: "reader_facility_mismatch" };
     }
@@ -362,7 +402,7 @@ export class PostgresStore {
         ? { valid: false, reason: "location_not_provisioned" }
         : { valid: true, reason: "legacy_unprovisioned_location" };
     }
-    if (!zone.active) return { valid: false, reason: "location_inactive" };
+    if (!zone.active || !(await this.facilitiesFor(tenantId)).some(f=>f.facilityId===zone.facilityId&&f.active)) return { valid: false, reason: "location_inactive" };
     if (zone.facilityId !== facilityId) {
       return { valid: false, reason: "zone_facility_mismatch" };
     }
@@ -452,7 +492,7 @@ export class PostgresStore {
   }
 
   async claimEncodingJob(tenantId, {
-    stationId, leaseSeconds = 60, now = new Date().toISOString()
+    stationId, batchId = null, leaseSeconds = 60, now = new Date().toISOString()
   }) {
     if (!stationId) throw new Error("stationId is required");
     const seconds = Math.min(Math.max(Number(leaseSeconds) || 60, 15), 600);
@@ -466,7 +506,7 @@ export class PostgresStore {
       const { rows } = await client.query(`
         WITH candidate AS (
           SELECT id FROM encoding_jobs
-          WHERE tenant_id = $1 AND status = 'queued'
+          WHERE tenant_id = $1 AND status = 'queued' AND ($5::uuid IS NULL OR batch_id = $5)
           ORDER BY batch_id, sequence_number
           FOR UPDATE SKIP LOCKED LIMIT 1
         )
@@ -476,7 +516,7 @@ export class PostgresStore {
           attempts = attempts + 1, updated_at = $3
         FROM candidate WHERE job.id = candidate.id
         RETURNING job.*
-      `, [tenant, stationId, now, seconds]);
+      `, [tenant, stationId, now, seconds, batchId]);
       if (!rows[0]) return null;
       const row = rows[0];
       await client.query(`
@@ -582,7 +622,7 @@ export class PostgresStore {
         const status = item.status ?? "active";
         if (!ASSET_STATUSES.has(status)) throw new Error(`Invalid asset status: ${status}`);
         const product = await client.query(
-          "SELECT id FROM products WHERE tenant_id = $1 AND sku = $2",
+          "SELECT id FROM products WHERE tenant_id = $1 AND sku = $2 AND active = true",
           [tenant, item.sku]
         );
         if (product.rowCount !== 1) throw new Error(`Unknown SKU: ${item.sku}`);
@@ -603,11 +643,12 @@ export class PostgresStore {
         }
         await client.query(`
           INSERT INTO rfid_assets (
-            tenant_id, epc, product_id, tid, status, encoded_at
-          ) VALUES ($1,$2,$3,$4,$5,$6)
+            tenant_id, epc, product_id, tid, status, encoded_at, wash_count, inspection_required, last_clean_return_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
         `, [
           tenant, epc, product.rows[0].id, item.tid ?? null,
-          status, item.encodedAt ?? null
+          status, item.encodedAt ?? null, Number(item.washCount ?? 0),
+          Boolean(item.inspectionRequired), item.lastCleanReturnAt ?? null
         ]);
         await client.query(`
           INSERT INTO asset_lifecycle_history (
@@ -1111,6 +1152,12 @@ export class PostgresStore {
               observedAt: event.observedAt
             }
           });
+          const targetZone = await client.query("SELECT zone_type FROM zones WHERE id = $1", [ids.zone_id]);
+          const cycleAsset = await client.query("SELECT * FROM rfid_assets WHERE tenant_id = $1 AND epc = $2 FOR UPDATE", [tenant, event.epc]);
+          if (cycleAsset.rowCount) {
+            const cycle = nextLinenCycle(cycleAsset.rows[0], targetZone.rows[0]?.zone_type);
+            await client.query(`UPDATE rfid_assets SET use_count = $1, cycle_phase = $2, wash_count = $3, inspection_required = inspection_required OR $3 >= 60, last_clean_return_at = CASE WHEN $4 THEN $5 ELSE last_clean_return_at END WHERE tenant_id = $6 AND epc = $7`, [cycle.useCount, cycle.cyclePhase, cycle.washCount, cycle.washed, event.observedAt, tenant, event.epc]);
+          }
         }
         await client.query(`
           INSERT INTO inventory_positions (
@@ -1201,12 +1248,16 @@ export class PostgresStore {
       const { rows } = await client.query(`
         SELECT i.*, f.code AS facility_code, z.code AS zone_code,
                r.code AS reader_code, p.sku,
-               COALESCE(a.status, 'unregistered') AS asset_status
+               COALESCE(a.status, 'unregistered') AS asset_status,
+               COALESCE(a.wash_count, 0) AS wash_count,
+               COALESCE(a.inspection_required, false) AS inspection_required,
+               a.last_clean_return_at, a.use_count, a.cycle_phase,
+               EXISTS(SELECT 1 FROM shipment_assets sa JOIN shipments s ON s.id = sa.shipment_id WHERE s.supplier_tenant_id = i.tenant_id AND sa.epc = i.epc AND sa.accepted_at IS NULL) AS in_transit
         FROM inventory_positions i
         JOIN facilities f ON f.id = i.facility_id
         JOIN zones z ON z.id = i.zone_id
         JOIN readers r ON r.id = i.reader_id
-        LEFT JOIN rfid_assets a ON a.epc = i.epc
+        LEFT JOIN rfid_assets a ON a.epc = i.epc AND a.tenant_id = i.tenant_id
         LEFT JOIN products p ON p.id = a.product_id
         ORDER BY i.epc
       `);
@@ -1224,6 +1275,10 @@ export class PostgresStore {
         readCount: Number(row.read_count),
         lastRssi: row.last_rssi,
         lastAntenna: row.last_antenna
+        ,useCount: Number(row.use_count ?? 0), cyclePhase: row.cycle_phase ?? "clean", inTransit: Boolean(row.in_transit)
+        ,washCount: Number(row.wash_count ?? 0)
+        ,inspectionRequired: Boolean(row.inspection_required)
+        ,lastCleanReturnAt: iso(row.last_clean_return_at)
       }));
     });
   }
@@ -1418,6 +1473,7 @@ export class PostgresStore {
         ...calculatePackaging(units, product.unitsPerBox, product.boxesPerPallet)
       };
     }).sort((a, b) => a.sku.localeCompare(b.sku));
+    const transit = new Set((await this.inventoryFor(tenantId)).filter(a => a.inTransit).map(a => a.epc));
     return {
       filters: {
         facilityId: facilityId ?? null,
@@ -1427,7 +1483,8 @@ export class PostgresStore {
       uniqueUnits: items.length,
       registeredUnits: items.length - unknownUnits,
       unknownUnits,
-      availableUnits: statusCounts.active,
+      availableUnits: items.filter(item => (item.assetStatus ?? item.asset_status) === "active" && !transit.has(item.epc)).length,
+      inTransitUnits: items.filter(item => transit.has(item.epc)).length,
       statusCounts,
       lines
     };
@@ -1756,8 +1813,8 @@ export class PostgresStore {
     epcs,
     shipmentId = randomUUID()
   }) {
-    if (!customerTenantId || customerTenantId === tenantId) {
-      throw new Error("A different customerTenantId is required");
+    if (!customerTenantId) {
+      throw new Error("customerTenantId is required");
     }
     if (!destinationFacilityId) throw new Error("destinationFacilityId is required");
     if (!Array.isArray(epcs) || epcs.length === 0) throw new Error("epcs must not be empty");
@@ -1766,6 +1823,8 @@ export class PostgresStore {
     const supplier = await this.#tenant(tenantId);
     const customer = await this.#tenant(customerTenantId);
     await this.#database.systemTransaction(async (client) => {
+      // Serialize package reservations for a supplier to prevent double dispatch.
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`shipment:${supplier}`]);
       const destination = await client.query(`
         SELECT id FROM facilities WHERE tenant_id = $1 AND code = $2
       `, [customer, destinationFacilityId]);
@@ -1782,12 +1841,17 @@ export class PostgresStore {
       ]);
       for (const epc of normalized) {
         const asset = await client.query(`
-          SELECT product_id FROM rfid_assets
-          WHERE tenant_id = $1 AND epc = $2
+          SELECT product_id, status FROM rfid_assets
+          WHERE tenant_id = $1 AND epc = $2 FOR UPDATE
         `, [supplier, epc]);
         if (asset.rowCount !== 1) {
           throw new Error(`EPC ${epc} is not owned by supplier tenant`);
         }
+        if (asset.rows[0].status !== "active") throw new Error(`EPC ${epc} is not available for shipment`);
+        const reserved = await client.query(`SELECT 1 FROM shipment_assets sa
+          JOIN shipments s ON s.id = sa.shipment_id
+          WHERE s.supplier_tenant_id = $1 AND sa.epc = $2 AND sa.accepted_at IS NULL`, [supplier, epc]);
+        if (reserved.rowCount) throw new Error(`EPC ${epc} is already reserved in a shipment`);
         await client.query(`
           INSERT INTO shipment_assets (shipment_id, epc, product_id)
           VALUES ($1,$2,$3)
@@ -1805,12 +1869,14 @@ export class PostgresStore {
         SELECT s.*, st.slug AS supplier_slug, ct.slug AS customer_slug,
                f.code AS destination_code,
                COUNT(sa.epc)::int AS asset_count,
-               COUNT(sa.accepted_at)::int AS accepted_asset_count
+               COUNT(sa.accepted_at)::int AS accepted_asset_count,
+               COALESCE(jsonb_agg(jsonb_build_object('epc', sa.epc, 'sku', sp.sku, 'acceptedAt', sa.accepted_at)) FILTER (WHERE sa.epc IS NOT NULL), '[]'::jsonb) AS manifest
         FROM shipments s
         JOIN tenants st ON st.id = s.supplier_tenant_id
         JOIN tenants ct ON ct.id = s.customer_tenant_id
         JOIN facilities f ON f.id = s.destination_facility_id
         LEFT JOIN shipment_assets sa ON sa.shipment_id = s.id
+        LEFT JOIN products sp ON sp.id = sa.product_id
         WHERE s.supplier_tenant_id = $1 OR s.customer_tenant_id = $1
         GROUP BY s.id, st.slug, ct.slug, f.code
         ORDER BY s.created_at DESC
@@ -1824,6 +1890,7 @@ export class PostgresStore {
         status: row.status,
         createdAt: iso(row.created_at),
         acceptedAt: iso(row.accepted_at),
+        assets: row.manifest,
         assetCount: row.asset_count,
         acceptedAssetCount: row.accepted_asset_count
       }));
@@ -1868,7 +1935,7 @@ export class PostgresStore {
     const expected = new Set(preview.manifest.map((item) => item.epc));
     const scanned = new Set(preview.scanned);
     const received = [...expected].filter((epc) => scanned.has(epc));
-    const missing = [...expected].filter((epc) => !scanned.has(epc));
+    const missing = preview.manifest.filter(item => !item.accepted_at && !scanned.has(item.epc)).map(item => item.epc);
     const unexpected = [...scanned].filter((epc) => !expected.has(epc));
 
     if (accept) {
@@ -1877,6 +1944,9 @@ export class PostgresStore {
         for (const epc of received) {
           const manifest = preview.manifest.find((item) => item.epc === epc);
           if (manifest.accepted_at) continue;
+          await client.query(`UPDATE exception_cases SET status = 'resolved', resolution = 'corrected',
+            resolved_by = 'shipment_acceptance', resolved_at = $1 WHERE tenant_id = $2 AND shipment_id = $3
+            AND epc = $4 AND exception_type = 'shipment_missing' AND status = 'open'`, [acceptedAt, customer, preview.shipmentUuid, epc]);
           const source = await client.query(`
             SELECT a.product_id, p.*
             FROM rfid_assets a
@@ -2230,7 +2300,7 @@ export class PostgresStore {
     caseId,
     { resolution, actorId, now = new Date().toISOString() }
   ) {
-    const allowed = new Set(["corrected", "accepted_exception", "quarantined", "dismissed"]);
+    const allowed = new Set(["corrected", "accepted_exception", "quarantined", "dismissed", "reassigned_property", "misplaced", "quarantine_bill"]);
     if (!allowed.has(resolution)) throw new Error("Unsupported exception resolution");
     const tenant = await this.#tenant(tenantId);
     return this.#database.tenantTransaction(tenant, async (client) => {

@@ -113,6 +113,7 @@ if (!production && dataStore === "sqlite" && store.productsFor(localTenantId).le
 }
 
 const server = createApp({
+  enableHotelPreview: !production && process.env.ENABLE_HOTEL_PREVIEW === "true",
   credentials,
   customerApiCredentials,
   admin: adminIdentities

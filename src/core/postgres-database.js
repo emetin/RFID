@@ -22,6 +22,7 @@ export class PostgresDatabase {
     this.#pool = new Pool({
       connectionString,
       ssl,
+      options: "-c client_encoding=UTF8",
       max: Number(process.env.PGPOOL_MAX ?? 20),
       idleTimeoutMillis: Number(process.env.PGPOOL_IDLE_MS ?? 30_000),
       connectionTimeoutMillis: Number(process.env.PGCONNECT_TIMEOUT_MS ?? 10_000)
@@ -35,13 +36,14 @@ export class PostgresDatabase {
   async healthCheck() {
     const startedAt = Date.now();
     const result = await this.#pool.query(
-      "SELECT current_database() AS database, now() AS server_time"
+      "SELECT current_database() AS database, now() AS server_time, current_setting('client_encoding') AS client_encoding"
     );
     return {
       status: "ok",
       database: result.rows[0].database,
       serverTime: result.rows[0].server_time,
       latencyMs: Date.now() - startedAt
+      ,clientEncoding: result.rows[0].client_encoding
     };
   }
 

@@ -331,7 +331,7 @@ test("HTTP API runs end to end on PostgresStore", {
   }
 });
 
-test("chain summary aggregates only allowlisted Postgres tenants", {
+test("company PostgreSQL summary excludes customer hotel inventory", {
   skip: !connectionString
 }, async () => {
   const database = new PostgresDatabase({ connectionString });
@@ -411,9 +411,9 @@ test("chain summary aggregates only allowlisted Postgres tenants", {
     );
     assert.equal(response.status, 200);
     const result = await response.json();
-    assert.equal(result.tenantCount, 2);
-    assert.equal(result.totals.uniqueUnits, 2);
-    assert.equal(result.lines[0].tenantCount, 2);
+    assert.equal(result.tenantCount, 1);
+    assert.equal(result.totals.uniqueUnits, 1);
+    assert.equal(result.lines[0].tenantCount, 1);
   } finally {
     if (server) await new Promise((resolve) => server.close(resolve));
     await store.close();

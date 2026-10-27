@@ -1,3 +1,4 @@
+import { nextLinenCycle } from "./linen-cycle.js";
 import { randomUUID } from "node:crypto";
 import { calculatePackaging } from "./packaging.js";
 import { gatewayStatus } from "./gateway-health.js";
@@ -6,6 +7,20 @@ import { ASSET_STATUSES, validateAssetTransition } from "./asset-lifecycle.js";
 import { commissioningEvent, receivingEvent, shippingEvent } from "../standards/epcis.js";
 
 export class InventoryStore {
+  #operations = new Map();
+
+  operationsFor(tenantId) {
+    return structuredClone(this.#operations.get(tenantId) ?? { hotels: [], policies: [], requests: [] });
+  }
+
+  operationsTenantIds() { return [...this.#operations.keys()]; }
+
+  updateOperations(tenantId, update) {
+    const state = this.operationsFor(tenantId);
+    const result = update(state);
+    this.#operations.set(tenantId, structuredClone(state));
+    return structuredClone(result);
+  }
   #seenEvents = new Set();
   #readEvents = new Map();
   #inventory = new Map();
@@ -125,6 +140,14 @@ export class InventoryStore {
       });
     }
     return { imported: products.length };
+  }
+
+  productUsage(tenantId, sku) {
+    return {
+      registered: [...this.#assets.values()].filter(a=>a.tenantId===tenantId&&a.sku===sku&&a.status!=='retired').length,
+      encoding: [...this.#encodingJobs.values()].filter(j=>j.tenantId===tenantId&&['queued','leased'].includes(j.status)&&this.#encodingBatches.get(`${tenantId}:${j.batchId}`)?.sku===sku).length,
+      receiving: [...this.#receivingBatches.values()].filter(b=>b.tenantId===tenantId&&b.sku===sku&&b.status==='draft').length
+    };
   }
 
   productsFor(tenantId) {
@@ -251,7 +274,7 @@ export class InventoryStore {
     for (const asset of assets) {
       const epc = String(asset.epc ?? "").toUpperCase();
       const product = this.#products.get(`${tenantId}:${asset.sku}`);
-      if (!product) throw new Error(`Unknown SKU: ${asset.sku}`);
+      if (!product || product.active === false) throw new Error(`Unknown or archived SKU: ${asset.sku}`);
       if (!/^[0-9A-F]{8,96}$/.test(epc)) throw new Error(`Invalid EPC: ${epc}`);
       const status = asset.status ?? "active";
       if (!ASSET_STATUSES.has(status)) throw new Error(`Invalid asset status: ${status}`);
@@ -273,7 +296,11 @@ export class InventoryStore {
         sku: asset.sku,
         tid: asset.tid ?? null,
         status,
-        encodedAt: asset.encodedAt ?? null
+        encodedAt: asset.encodedAt ?? null,
+        washCount: Number(asset.washCount ?? 0),
+        useCount: Number(asset.useCount ?? 0), cyclePhase: asset.cyclePhase ?? "clean",
+        inspectionRequired: Boolean(asset.inspectionRequired),
+        lastCleanReturnAt: asset.lastCleanReturnAt ?? null
       });
       this.#assetLifecycleHistory.push({
         historyId: randomUUID(),
@@ -458,8 +485,8 @@ export class InventoryStore {
     shipmentId = randomUUID(),
     actorId = "system"
   }) {
-    if (!customerTenantId || customerTenantId === tenantId) {
-      throw new Error("A different customerTenantId is required");
+    if (!customerTenantId) {
+      throw new Error("customerTenantId is required");
     }
     if (!destinationFacilityId) throw new Error("destinationFacilityId is required");
     if (!Array.isArray(epcs) || epcs.length === 0) throw new Error("epcs must not be empty");
@@ -470,6 +497,9 @@ export class InventoryStore {
     const assets = normalized.map((epc) => {
       const asset = this.#assets.get(`${tenantId}:${epc}`);
       if (!asset) throw new Error(`EPC ${epc} is not owned by supplier tenant`);
+      if (asset.status !== "active") throw new Error(`EPC ${epc} is not available for shipment`);
+      if ([...this.#shipments.values()].some(s => s.supplierTenantId === tenantId &&
+        s.assets.some(a => a.epc === epc && !a.acceptedAt))) throw new Error(`EPC ${epc} is already reserved in a shipment`);
       return { epc, sku: asset.sku, acceptedAt: null };
     });
     const shipment = {
@@ -527,7 +557,7 @@ export class InventoryStore {
     const expected = new Set(shipment.assets.map((asset) => asset.epc));
     const scanned = new Set(session.uniqueEpcs);
     const received = [...expected].filter((epc) => scanned.has(epc));
-    const missing = [...expected].filter((epc) => !scanned.has(epc));
+    const missing = shipment.assets.filter(asset => !asset.acceptedAt && !scanned.has(asset.epc)).map(asset => asset.epc);
     const unexpected = [...scanned].filter((epc) => !expected.has(epc));
 
     let acceptanceTime = null;
@@ -564,6 +594,15 @@ export class InventoryStore {
           unknownCase.resolvedAt = acceptedAt;
         }
         manifestAsset.acceptedAt = acceptedAt;
+        for (const exception of this.#exceptions.values()) {
+          if (exception.tenantId === tenantId && exception.shipmentId === shipmentId && exception.epc === epc &&
+              exception.exceptionType === "shipment_missing" && exception.status === "open") {
+            exception.status = "resolved";
+            exception.resolution = "corrected";
+            exception.resolvedBy = "shipment_acceptance";
+            exception.resolvedAt = acceptedAt;
+          }
+        }
         const currentCustody = this.#custodyHistory.find((entry) =>
           entry.epc === epc &&
           entry.tenantId === shipment.supplierTenantId &&
@@ -796,6 +835,14 @@ export class InventoryStore {
             observedAt: event.observedAt
           }
         });
+        const targetZone = this.#zones.get(`${tenantId}:${zoneId}`);
+        if (asset) {
+          const cycle = nextLinenCycle(asset, targetZone?.zoneType);
+          Object.assign(asset, { useCount: cycle.useCount, washCount: cycle.washCount, cyclePhase: cycle.cyclePhase });
+          if (cycle.washed) asset.lastCleanReturnAt = event.observedAt;
+          asset.inspectionRequired = asset.washCount >= 60;
+          if (asset.inspectionRequired) this.raiseException({ tenantId, dedupeKey: `wash-threshold:${event.epc}`, exceptionType: "wash_threshold", severity: "warning", epc: event.epc, details: { washCount: asset.washCount, threshold: 60 } });
+        }
       }
       this.#inventory.set(key, {
         tenantId,
@@ -864,7 +911,12 @@ export class InventoryStore {
         return {
           ...item,
           sku: asset?.sku ?? null,
-          assetStatus: asset?.status ?? "unregistered"
+          assetStatus: asset?.status ?? "unregistered",
+          washCount: asset?.washCount ?? 0,
+          useCount: asset?.useCount ?? 0, cyclePhase: asset?.cyclePhase ?? "clean",
+          inTransit: [...this.#shipments.values()].some(s => s.supplierTenantId === tenantId && s.assets.some(a => a.epc === item.epc && !a.acceptedAt)),
+          inspectionRequired: asset?.inspectionRequired ?? false,
+          lastCleanReturnAt: asset?.lastCleanReturnAt ?? null
         };
       })
       .sort((a, b) => a.epc.localeCompare(b.epc));
@@ -932,6 +984,24 @@ export class InventoryStore {
 
   movementsFor(tenantId) {
     return this.#movements.filter((movement) => movement.tenantId === tenantId);
+  }
+
+  linenOperationsFor(tenantId, { now = Date.now(), safetyMargin = 20 } = {}) {
+    const zoneStages = new Map(this.zonesFor(tenantId).map((zone) => [zone.zoneId, zone.zoneType]));
+    const stages = { clean: 0, inRoom: 0, soiled: 0, inWash: 0, other: 0 };
+    const notSeen = [];
+    const inspection = [];
+    for (const item of this.inventoryFor(tenantId)) {
+      const type = String(zoneStages.get(item.zoneId) ?? "").toLowerCase();
+      if (["clean", "clean_stock", "clean_return", "linen_room"].includes(type)) stages.clean += 1;
+      else if (["room", "in_room", "assigned"].includes(type)) stages.inRoom += 1;
+      else if (["soiled", "hamper", "dirty"].includes(type)) stages.soiled += 1;
+      else if (["wash", "in_wash", "laundry"].includes(type)) stages.inWash += 1;
+      else stages.other += 1;
+      if (item.lastSeenAt && now - Date.parse(item.lastSeenAt) >= 30 * 86400000) notSeen.push(item);
+      if (item.inspectionRequired || item.washCount >= 60) inspection.push(item);
+    }
+    return { stages, safetyMargin, cleanLow: stages.clean < safetyMargin, notSeen, inspection };
   }
 
   pendingMovementsFor(tenantId) {
@@ -1207,7 +1277,7 @@ export class InventoryStore {
     caseId,
     { resolution, actorId, now = new Date().toISOString() }
   ) {
-    const allowed = new Set(["corrected", "accepted_exception", "quarantined", "dismissed"]);
+    const allowed = new Set(["corrected", "accepted_exception", "quarantined", "dismissed", "reassigned_property", "misplaced", "quarantine_bill"]);
     if (!allowed.has(resolution)) throw new Error("Unsupported exception resolution");
     const exception = [...this.#exceptions.values()]
       .find((item) => item.tenantId === tenantId && item.caseId === caseId);
@@ -1459,12 +1529,14 @@ export class InventoryStore {
       };
     }).sort((a, b) => a.sku.localeCompare(b.sku));
 
+    const transit = new Set(this.inventoryFor(tenantId).filter(a => a.inTransit).map(a => a.epc));
     return {
       filters: { facilityId: facilityId ?? null, zoneId: zoneId ?? null, sessionId: sessionId ?? null },
       uniqueUnits: matched.length,
       registeredUnits: matched.length - unknownUnits,
       unknownUnits,
-      availableUnits: statusCounts.active,
+      availableUnits: matched.filter(item => item.assetStatus === "active" && !transit.has(item.epc)).length,
+      inTransitUnits: matched.filter(item => transit.has(item.epc)).length,
       statusCounts,
       lines
     };
@@ -1497,7 +1569,7 @@ export class InventoryStore {
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100_000) {
       throw new Error("requestedQuantity must be an integer between 1 and 100000");
     }
-    if (!this.#products.has(`${tenantId}:${sku}`)) throw new Error("Unknown or inactive SKU");
+    if (!this.#products.get(`${tenantId}:${sku}`)?.active) throw new Error("Unknown or inactive SKU");
     if (epcScheme !== "GTX96") throw new Error("Unsupported EPC scheme");
     this.#encodingBatches.set(`${tenantId}:${batchId}`, {
       batchId, tenantId, sku, requestedQuantity: quantity, epcScheme,
@@ -1520,7 +1592,7 @@ export class InventoryStore {
     return this.#publicEncodingBatch(tenantId, batchId);
   }
 
-  claimEncodingJob(tenantId, { stationId, leaseSeconds = 60, now = new Date().toISOString() }) {
+  claimEncodingJob(tenantId, { stationId, batchId = null, leaseSeconds = 60, now = new Date().toISOString() }) {
     if (!stationId) throw new Error("stationId is required");
     for (const job of this.#encodingJobs.values()) {
       if (job.tenantId === tenantId && job.status === "leased" && job.leaseUntil <= now) {
@@ -1528,7 +1600,7 @@ export class InventoryStore {
       }
     }
     const job = [...this.#encodingJobs.values()]
-      .filter((item) => item.tenantId === tenantId && item.status === "queued")
+      .filter((item) => item.tenantId === tenantId && item.status === "queued" && (!batchId || item.batchId === batchId))
       .sort((a, b) => a.batchId.localeCompare(b.batchId) || a.sequenceNumber - b.sequenceNumber)[0];
     if (!job) return null;
     const leaseToken = randomUUID();
@@ -1617,6 +1689,7 @@ export class InventoryStore {
       status: shipment.status,
       createdAt: shipment.createdAt,
       acceptedAt: shipment.acceptedAt,
+      assets: shipment.assets.map(a => ({ ...a })),
       assetCount: shipment.assets.length,
       acceptedAssetCount: shipment.assets.filter((asset) => asset.acceptedAt).length
     };

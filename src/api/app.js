@@ -1,3 +1,9 @@
+import { changeHotelContact } from '../core/hotel-contacts.js';
+import { importZohoCatalog } from '../integrations/zoho-catalog-import.js';
+import { buildReports, reportCsv } from "../core/reports.js";
+import { setResourceActive } from "../core/resource-archive.js";
+import { companyPortalAccess, commercialRequest } from "../core/portal-access.js";
+import { createHotelPreviewStore, HOTEL_PREVIEW_TENANT } from "../core/hotel-preview.js";
 import { createServer } from "node:http";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -17,11 +23,23 @@ import {
   writeRru9809Epc
 } from "../gateway/adapters/rru9809usb.js";
 import { gs1UsProfile } from "../standards/gs1.js";
+import { managedHotels, evaluateStock, saveStockPolicy, transitionRequest, dispatchStockRequest, requestCancellation } from "../core/hotel-operations.js";
+
+import { setupWarehouses, provisionWorkflowLocation, ensureOperatorStation, hotelDetails, workflowSnapshot, workflowScan, dispatchTransfer, receiveTransfer, saveLifespan, enforceLifespan, normalizeEpcs } from "../core/supply-workflow.js";
 
 const MAX_BODY_BYTES = 2_000_000;
 const EPC_PATTERN = /^[0-9A-F]{8,96}$/;
 const DASHBOARD = readFileSync(new URL("../../public/dashboard.html", import.meta.url), "utf8");
 const LOGIN = readFileSync(new URL("../../public/login.html", import.meta.url), "utf8");
+const WORKFLOW_JS = readFileSync(new URL("../../public/workflow.js", import.meta.url));
+const PORTAL_DESIGN_CSS = readFileSync(new URL("../../public/portal-design.css", import.meta.url));
+const PORTAL_FONTS = Object.fromEntries(['Inter','Manrope'].map(name=>[name,readFileSync(new URL(`../../public/assets/fonts/${name}-Variable.woff2`,import.meta.url))]));
+const PORTAL_DESIGN_JS = Buffer.from(readFileSync(new URL("../../public/portal-design.js", import.meta.url), "utf8").replace("'/assets/portal-design.css'", "'/assets/portal-design.css?v="+createHash("sha256").update(PORTAL_DESIGN_CSS).digest("hex").slice(0,12)+"'"));
+const PORTAL_REPORTS_JS = readFileSync(new URL("../../public/portal-reports.js", import.meta.url));
+const PORTAL_ROLES_JS = readFileSync(new URL("../../public/portal-roles.js", import.meta.url));
+const PORTAL = readFileSync(new URL("../../public/portal.html", import.meta.url), "utf8")
+  .replace('src="/assets/workflow.js"', `src="/assets/workflow.js?v=${createHash("sha256").update(WORKFLOW_JS).digest("hex").slice(0, 12)}"`)
+  .replace('<script>','<script src="/assets/portal-roles.js?v='+createHash("sha256").update(PORTAL_ROLES_JS).digest("hex").slice(0,12)+'" defer></script>\n<script src="/assets/portal-design.js?v='+createHash("sha256").update(PORTAL_DESIGN_JS).digest("hex").slice(0,12)+'" defer></script>\n<script src="/assets/portal-reports.js?v='+createHash("sha256").update(PORTAL_REPORTS_JS).digest("hex").slice(0,12)+'" defer></script>\n<script>');
 const PATAK_LOGO = readFileSync(new URL("../../public/assets/patak-logo.png", import.meta.url));
 const GLOBALTEX_LOGO = readFileSync(new URL("../../public/assets/globaltex-logo.png", import.meta.url));
 const ADMIN_ROLES = new Set(["viewer", "operator", "hotel_admin", "chain_admin"]);
@@ -69,9 +87,37 @@ function binary(response, status, body, contentType) {
   response.writeHead(status, {
     "content-type": contentType,
     "content-length": body.length,
-    "cache-control": "public, max-age=3600"
+    "cache-control": (contentType.startsWith("text/javascript") || contentType.startsWith("text/css")) ? "no-cache" : "public, max-age=3600"
   });
   response.end(body);
+}
+
+function linenStage(zoneType) {
+  const type = String(zoneType ?? "").toLowerCase();
+  if (["clean", "clean_stock", "clean_return", "linen_room", "storage"].includes(type)) return "clean";
+  if (["room", "in_room", "assigned", "in_use"].includes(type)) return "inRoom";
+  if (["soiled", "hamper", "dirty"].includes(type)) return "soiled";
+  if (["wash", "in_wash", "laundry"].includes(type)) return "inWash";
+  if (type === "drying") return "drying";
+  if (type === "distribution") return "distribution";
+  return "other";
+}
+
+async function linenOperations(store, tenantId, { now = Date.now(), safetyMargin = 20 } = {}) {
+  const [inventory, zones] = await Promise.all([
+    store.inventoryFor(tenantId),
+    store.zonesFor(tenantId)
+  ]);
+  const zoneTypes = new Map(zones.map((zone) => [zone.zoneId, zone.zoneType]));
+  const stages = { clean: 0, inRoom: 0, soiled: 0, inWash: 0, drying: 0, distribution: 0, other: 0 };
+  const notSeen = [];
+  const inspection = [];
+  for (const item of inventory) {
+    stages[linenStage(zoneTypes.get(item.zoneId))] += 1;
+    if (item.lastSeenAt && now - Date.parse(item.lastSeenAt) >= 30 * 86400000) notSeen.push(item);
+    if (item.inspectionRequired || Number(item.washCount) >= 60) inspection.push(item);
+  }
+  return { stages, safetyMargin, cleanLow: stages.clean < safetyMargin, notSeen, inspection };
 }
 
 function cookieValue(request, name) {
@@ -84,8 +130,8 @@ function cookieValue(request, name) {
 
 async function identityForCredentials(username, password, admin, store) {
   let identity;
-  if (admin?.identities) identity = admin.identities[password];
-  else if (admin?.token === password) {
+  if (username === "admin" && admin?.identities) identity = admin.identities[password];
+  else if (username === "admin" && admin?.token === password) {
     identity = {
       actorId: "local-admin",
       role: admin.role ?? "hotel_admin",
@@ -144,8 +190,12 @@ async function authenticateAdmin(request, admin, store, sessionSecret) {
   }
   if (!identity) return { error: "admin_auth_required" };
 
-  const tenantIds = identity.tenantIds ?? [];
-  const tenantId = request.headers["x-tenant-id"] ?? identity.defaultTenantId ?? tenantIds[0];
+  let tenantIds = [...(identity.tenantIds ?? [])];
+  if (identity.role === "chain_admin") {
+    const hotels = await managedHotels(store, tenantIds);
+    tenantIds = [...new Set([...tenantIds, ...hotels.map((hotel) => hotel.tenantId)])];
+  }
+  const tenantId = request.headers["x-tenant-id"] ?? (identity.role === "chain_admin" ? tenantIds[0] : identity.defaultTenantId ?? tenantIds[0]);
   if (!tenantId || !tenantIds.includes(tenantId)) return { error: "tenant_access_denied" };
   if (!ADMIN_ROLES.has(identity.role)) return { error: "admin_role_invalid" };
   return {
@@ -171,7 +221,11 @@ function canMutate(principal, pathname) {
   if (principal.role === "hotel_admin" || principal.role === "chain_admin") return true;
   if (principal.role === "viewer") return false;
   return pathname === "/v1/admin/sessions" ||
+    pathname === "/v1/admin/stock/requests" ||
+    /^\/v1\/admin\/workflow\/(scan|receive)$/.test(pathname) ||
+    /^\/v1\/admin\/stock\/requests\/[^/]+$/.test(pathname) ||
     pathname === "/v1/admin/hardware/rru9809/scan" ||
+    pathname === "/v1/admin/hardware/rru9809/detect" ||
     /^\/v1\/admin\/sessions\/[^/]+\/complete$/.test(pathname) ||
     /^\/v1\/admin\/shipments\/[^/]+\/accept$/.test(pathname) ||
     /^\/v1\/admin\/receiving-batches(?:\/[^/]+\/(?:scan|approve|tags\/[^/]+))?$/.test(pathname) ||
@@ -192,6 +246,14 @@ function managedUserScope(principal, value, existing = null) {
     throw new Error("At least one hotel assignment is required");
   }
   const uniqueTenantIds = [...new Set(tenantIds.map(String))];
+  if (principal.role === "chain_admin" && role === "chain_admin" &&
+      (uniqueTenantIds.length !== 1 || uniqueTenantIds[0] !== principal.tenantIds[0])) {
+    throw new Error("Company administrator accounts must belong only to Globaltex head office.");
+  }
+  if (principal.role === "chain_admin" && role !== "chain_admin" && uniqueTenantIds.includes(principal.tenantIds[0]) &&
+      (!existing || value.tenantIds || value.role)) {
+    throw new Error("Hotel accounts cannot be assigned to Globaltex head office. Create a hotel first.");
+  }
   if (uniqueTenantIds.some((tenantId) => !principal.tenantIds.includes(tenantId))) {
     throw new Error("User assignment exceeds your hotel scope");
   }
@@ -348,12 +410,18 @@ export function createApp({
   credentials,
   admin,
   customerApiCredentials = {},
-  store = new InventoryStore(),
+  store: primaryStore = new InventoryStore(),
+  enableHotelPreview = false,
   now,
   requireProvisionedReaders = false,
+  rfidWriter = writeRru9809Epc,
+  rfidReader = scanRru9809,
   sessionSecret = admin?.sessionSecret ?? admin?.token ?? "local-session-secret",
   secureCookies = false
 } = {}) {
+  const store = primaryStore;
+  const previewEnabled = enableHotelPreview === true && process.env.NODE_ENV !== "production";
+  let previewStorePromise;
   if (!credentials || Object.keys(credentials).length === 0) {
     throw new Error("At least one device credential is required");
   }
@@ -361,7 +429,19 @@ export function createApp({
     ([token, credential]) => [tokenHash(token), credential]
   ));
 
-  return createServer(async (request, response) => {
+  let monitoring = false;
+  const stockMonitor = setInterval(async () => {
+    if (monitoring) return;
+    monitoring = true;
+    try {
+      for (const tenantId of await store.operationsTenantIds()) await evaluateStock(store, tenantId);
+    } catch (error) { console.error("Stock monitor failed:", error.message); }
+    finally { monitoring = false; }
+  }, 30_000);
+  stockMonitor.unref();
+
+  const server = createServer(async (request, response) => {
+    let store = primaryStore;
     try {
       const url = new URL(request.url, "http://localhost");
 
@@ -376,6 +456,13 @@ export function createApp({
           return json(response, 503, { status: "not_ready" });
         }
       }
+
+      if (request.method === "GET" && url.pathname === "/assets/workflow.js") return binary(response, 200, WORKFLOW_JS, "text/javascript; charset=utf-8");
+      if (request.method === "GET" && url.pathname === "/assets/portal-reports.js") return binary(response, 200, PORTAL_REPORTS_JS, "text/javascript; charset=utf-8");
+      if (request.method === "GET" && url.pathname === "/assets/portal-design.js") return binary(response, 200, PORTAL_DESIGN_JS, "text/javascript; charset=utf-8");
+      if (request.method === "GET" && url.pathname === "/assets/portal-design.css") return binary(response, 200, PORTAL_DESIGN_CSS, "text/css; charset=utf-8");
+      if (request.method === "GET" && /^\/assets\/fonts\/(Inter|Manrope)-Variable\.woff2$/.test(url.pathname)) return binary(response,200,PORTAL_FONTS[url.pathname.match(/\/(Inter|Manrope)-Variable/)[1]],'font/woff2');
+      if (request.method === "GET" && url.pathname === "/assets/portal-roles.js") return binary(response, 200, PORTAL_ROLES_JS, "text/javascript; charset=utf-8");
 
       if (request.method === "GET" && url.pathname === "/login") {
         return html(response, 200, LOGIN);
@@ -439,7 +526,12 @@ export function createApp({
         request.method === "GET" &&
         (url.pathname === "/dashboard" || url.pathname.startsWith("/dashboard/"))
       ) {
-        return html(response, 200, DASHBOARD);
+        const principal = await authenticateAdmin(request, admin, store, sessionSecret);
+        if (principal.error) {
+          response.writeHead(302, { location: "/login" });
+          return response.end();
+        }
+        return html(response, 200, principal.role === "chain_admin" && url.pathname.startsWith("/dashboard/technical") ? DASHBOARD : PORTAL);
       }
 
       if (url.pathname.startsWith("/v1/customer/")) {
@@ -532,10 +624,29 @@ export function createApp({
       }
 
       if (url.pathname.startsWith("/v1/admin/")) {
-        const principal = await authenticateAdmin(request, admin, store, sessionSecret);
+        const authenticationRequest = request.headers["x-preview-mode"] === "hotel"
+          ? { headers: { ...request.headers, "x-tenant-id": undefined } } : request;
+        let principal = await authenticateAdmin(authenticationRequest, admin, store, sessionSecret);
         if (principal.error) return requireAdmin(response, principal.error);
+        if (url.pathname === "/v1/admin/preview" && request.method === "GET") return json(response,200,{enabled:previewEnabled&&principal.role==="chain_admin",readOnly:true,tenantId:HOTEL_PREVIEW_TENANT});
+        if (request.headers["x-preview-mode"] === "hotel") {
+          // Authenticate against the real store, then route reads to disposable sample data.
+          if (!previewEnabled || principal.role !== "chain_admin") return json(response,403,{error:"preview_unavailable"});
+          if (request.method !== "GET") return json(response,403,{error:"preview_read_only",message:"This is a read-only hotel preview with sample data. Return to the company workspace to make changes."});
+          previewStorePromise ??= createHotelPreviewStore();
+          store = await previewStorePromise;
+          principal = {...principal, role:"hotel_admin",tenantId:HOTEL_PREVIEW_TENANT,tenantIds:[HOTEL_PREVIEW_TENANT],displayName:"Demo Hotel Manager",managed:false,userId:null};
+        }
+        if (!companyPortalAccess(principal, request.method, url.pathname)) return json(response, 403, { error: "hotel_operations_private", message: "Hotel inventory, rooms, laundry and stock rules are private to the hotel. Globaltex can manage accounts, orders and its own shipments." });
+        const manufacturingOnly = /^\/v1\/admin\/(encoding|receiving-batches|zoho|retention|hardware)(\/|$)/.test(url.pathname);
+        if (principal.role !== "chain_admin" && manufacturingOnly) return json(response, 403, { error: "globaltex_admin_required" });
         const tenantId = principal.tenantId;
         const mutation = !["GET", "HEAD", "OPTIONS"].includes(request.method);
+        const globaltexOnly = /^\/v1\/admin\/(?:users|hotels|encoding|receiving-batches|hardware|zoho|retention|readers|facilities|zones|catalog\/import|assets\/register)(?:\/|$)/.test(url.pathname) ||
+          (request.method !== "GET" && url.pathname === "/v1/admin/shipments");
+        if (principal.role !== "chain_admin" && globaltexOnly && mutation) {
+          return json(response, 403, { error: "globaltex_admin_required" });
+        }
         if (mutation && !canMutate(principal, url.pathname)) {
           return json(response, 403, { error: "admin_role_forbidden" });
         }
@@ -565,6 +676,237 @@ export function createApp({
             managed: principal.managed,
             userId: principal.userId
           });
+        }
+
+        if (url.pathname === "/v1/admin/hotels" && request.method === "GET") {
+          const hotels = await managedHotels(store, principal.tenantIds);
+          const names = new Map(hotels.map((h) => [h.tenantId, h]));
+          const visible = [];
+          for (const id of principal.tenantIds) visible.push(names.get(id) ?? {
+            tenantId: id, name: id === "globaltex-local" ? "Globaltex Head Office" :
+              (await store.facilitiesFor(id)).find((facility) => facility.facilityType === "hotel")?.name ?? id
+          });
+          return json(response, 200, { hotels: visible });
+        }
+        if (url.pathname === "/v1/admin/hotels" && request.method === "POST") {
+          try {
+            const value = JSON.parse(await readBody(request));
+            const name = String(value.name ?? "").trim();
+            if (name.length < 2 || name.length > 120) throw new Error("Hotel name must be 2–120 characters long.");
+            const hotel = { ...hotelDetails(value), tenantId: `hotel-${randomUUID()}`, createdAt: new Date().toISOString() };
+            // Establish the facility before exposing the hotel in the directory.
+            await provisionWorkflowLocation(store, hotel.tenantId, { facilityId: "main", name, facilityType: "hotel", timezone: hotel.timezone }, [["storage","Storage","storage"],["washing","Washing","in_wash"],["drying","Drying","drying"],["distribution","Distribution","distribution"],["in-use","In Use","in_use"]]);
+            await store.updateOperations(principal.tenantIds[0], (state) => { state.hotels.push(hotel); });
+            return json(response, 201, hotel);
+          } catch (error) { return json(response, 422, { error: "invalid_hotel", message: error.message }); }
+        }
+        const contactRoute=url.pathname.match(/^\/v1\/admin\/hotels\/([^/]+)\/contacts(?:\/([^/]+))?$/);
+        if(contactRoute&&['POST','PUT'].includes(request.method)){
+          if(principal.role!=='chain_admin')return json(response,403,{error:'globaltex_admin_required'});
+          const hotelId=decodeURIComponent(contactRoute[1]),root=principal.tenantIds[0];
+          if(!principal.tenantIds.includes(hotelId)||(request.method==='PUT'&&!contactRoute[2])||(request.method==='POST'&&contactRoute[2]))return json(response,404,{error:'hotel_or_contact_not_found'});
+          try{const value=JSON.parse(await readBody(request));let saved;
+            await store.updateOperations(root,state=>{const hotel=state.hotels.find(h=>h.tenantId===hotelId);if(!hotel)throw new Error('Hotel not found.');saved=changeHotelContact(hotel,value,principal.actorId,contactRoute[2]?decodeURIComponent(contactRoute[2]):null);});
+            await store.recordAudit({tenantId:root,actorId:principal.actorId,actorRole:principal.role,action:'hotel.contact.update',entityType:'hotel',entityId:hotelId,details:{contactId:saved.contactId,active:saved.active}});
+            return json(response,200,saved);
+          }catch(error){return json(response,422,{error:'invalid_hotel_contact',message:error.message});}
+        }
+        const hotelUpdate = url.pathname.match(/^\/v1\/admin\/hotels\/([^/]+)$/);
+        if (hotelUpdate && request.method === "PUT") {
+          try {
+            const id = decodeURIComponent(hotelUpdate[1]);
+            const root = principal.tenantIds[0];
+            const existing = (await managedHotels(store, [root])).find(h => h.tenantId === id);
+            if (!existing || !principal.tenantIds.includes(id)) return json(response, 404, { error: "hotel_not_found" });
+            const changes = hotelDetails(JSON.parse(await readBody(request)), existing);
+            const updated = { ...changes, updatedBy: principal.actorId, updatedAt: new Date().toISOString() };
+            await store.upsertFacility(id, { facilityId: "main", name: updated.name, facilityType: "hotel", timezone: updated.timezone });
+            await store.updateOperations(root, state => { Object.assign(state.hotels.find(h => h.tenantId === id), updated); });
+            return json(response, 200, updated);
+          } catch (error) { return json(response, 422, { error: "invalid_hotel", message: error.message }); }
+        }
+        if (["/v1/admin/reports","/v1/admin/reports/export"].includes(url.pathname) && request.method === "GET") {
+          try {
+            const report=await buildReports(store,principal,Object.fromEntries(url.searchParams),now?.()??Date.now());
+            if (url.pathname.endsWith("/export")) {
+              const key=url.searchParams.get("dataset")??"inventory",data=report.datasets[key];
+              const csv=reportCsv(report,key,{search:url.searchParams.get("search")??""});
+              const stamp=data.scope==="snapshot"?report.generatedAt.slice(0,10):report.filters.from+"_"+report.filters.to;
+              response.writeHead(200,{"content-type":"text/csv; charset=utf-8","cache-control":"private, no-store","content-disposition":'attachment; filename="globaltex-'+(request.headers["x-preview-mode"]==="hotel"?"demo-":"")+report.mode+'-'+key+'-'+stamp+'.csv"'});
+              return response.end(csv);
+            }
+            response.setHeader("cache-control","private, no-store");
+            return json(response,200,report);
+          } catch(error) { return json(response,422,{error:"invalid_report",message:error.message}); }
+        }
+        if (url.pathname === "/v1/admin/workflow" && request.method === "GET") {
+          const snapshot = await workflowSnapshot(store, tenantId);
+          if (principal.role !== "chain_admin") delete snapshot.encodingBatches;
+          return json(response, 200, snapshot);
+        }
+        if (url.pathname.startsWith("/v1/admin/workflow/") && request.method === "POST") {
+          try {
+            const action = url.pathname.split("/").at(-1);
+            const value = JSON.parse(await readBody(request) || "{}");
+            const adminOnly = ["setup", "dispatch", "tag", "register", "product"];
+            if (adminOnly.includes(action) && principal.role !== "chain_admin") return json(response, 403, { error: "globaltex_admin_required" });
+            if (action === "resource-state") {
+              if (!["chain_admin","hotel_admin"].includes(principal.role)) return json(response,403,{error:"admin_role_forbidden"});
+              if (value.kind !== "location" && principal.role !== "chain_admin") return json(response,403,{error:"globaltex_admin_required"});
+              return json(response,200,await setResourceActive(store,principal,value));
+            }
+            if (action === "setup") {
+              if (tenantId !== principal.tenantIds[0]) throw new Error("Switch to the Globaltex head office workspace to set up company warehouses.");
+              return json(response, 200, { facilities: await setupWarehouses(store, tenantId) });
+            }
+            if (action === "lifespan") {
+              if (!["chain_admin", "hotel_admin"].includes(principal.role)) return json(response, 403, { error: "admin_role_forbidden" });
+              const rule = await saveLifespan(store, tenantId, value, principal.actorId);
+              await evaluateStock(store, tenantId);
+              return json(response, 200, rule);
+            }
+            if (action === "location") {
+              if (!["chain_admin", "hotel_admin"].includes(principal.role)) return json(response, 403, { error: "admin_role_forbidden" });
+              const facility = (await store.facilitiesFor(tenantId)).find(f => f.facilityId === value.facilityId && f.active !== false);
+              const locationName = String(value.name ?? "").trim();
+              if (!facility || !locationName || locationName.length > 120 || !["warehouse","receiving","in_room","soiled","in_wash","clean_return","waiting","storage","drying","distribution","in_use"].includes(value.zoneType)) throw new Error("Select a facility and location type, and enter a name of up to 120 characters.");
+              if ((await store.zonesFor(tenantId)).some(z => z.facilityId === facility.facilityId && z.name.toLocaleLowerCase("en-US") === locationName.toLocaleLowerCase("en-US"))) throw new Error("A location with this name already exists at this facility.");
+              const zoneId = "location-" + randomUUID();
+              await provisionWorkflowLocation(store, tenantId, facility, [[zoneId, locationName, value.zoneType]]);
+              return json(response, 201, { zoneId, name: locationName, facilityId: facility.facilityId, zoneType: value.zoneType });
+            }
+            if (action === "product") {
+              if ((await store.productsFor(tenantId)).some(p=>p.sku===value.sku&&p.active===false)) throw new Error("This SKU is archived. Restore it from Product catalog before editing.");
+              return json(response, 201, await store.upsertProducts(tenantId, [{ sku: value.sku, name: value.name, category: "Hotel linen", unitsPerBox: Number(value.unitsPerBox || 1), boxesPerPallet: Number(value.boxesPerPallet || 1) }]));
+            }
+            if (action === "dispatch") {
+              if (!principal.tenantIds.includes(value.customerTenantId)) return json(response, 403, { error: "tenant_access_denied" });
+              return json(response, 201, await dispatchTransfer(store, tenantId, value, principal.actorId));
+            }
+            if (action === "read") {
+              if (principal.role !== "chain_admin") return json(response,403,{error:"hotel_gateway_required",message:"Hotel scans must come from the hotel's assigned gateway, not the Globaltex server reader."});
+              const reads = await rfidReader({ port: process.env.RRU9809_PORT ?? "COM4", baudRate: Number(process.env.RRU9809_BAUD_RATE ?? 57600), scanCount: 5 });
+              return json(response, 200, { epcs: [...new Set(reads.map(r => r.epc))] });
+            }
+            if (["scan", "receive"].includes(action)) {
+              if (value.readMode === "device" && principal.role !== "chain_admin") return json(response,403,{error:"hotel_gateway_required",message:"Use your hotel's assigned reader gateway or a confirmed physical count."});
+              if (value.readMode === "gateway") {
+                const cutoff=Date.now()-60000;
+                value.epcs=(await store.inventoryFor(tenantId)).filter(a=>a.zoneId===value.zoneId&&Date.parse(a.lastSeenAt)>=cutoff&&Date.parse(a.lastSeenAt)<=Date.now()+5000).map(a=>a.epc);
+                if (!value.epcs.length) throw new Error("No recent gateway reads at this location. Scan items with your hotel's assigned reader, then try again within 60 seconds.");
+              }
+              else if (value.readMode === "device") value.epcs = [...new Set((await rfidReader({ port: process.env.RRU9809_PORT ?? "COM4", baudRate: Number(process.env.RRU9809_BAUD_RATE ?? 57600), scanCount: 5 })).map(r => r.epc))];
+              else if (value.confirmed !== true || !String(value.reason ?? "").trim()) throw new Error("Confirm the physical count and enter a reason for manual EPC entry.");
+              value.epcs = normalizeEpcs(value.epcs);
+              const result = action === "scan" ? await workflowScan(store, tenantId, value, principal.actorId) : await receiveTransfer(store, tenantId, value.shipmentId, value, principal.actorId);
+              await store.recordAudit({ tenantId, actorId: principal.actorId, actorRole: principal.role, action: "workflow." + action, entityType: "scan", entityId: value.shipmentId ?? null, details: { readMode: value.readMode, reason: value.reason, epcs: value.epcs, zoneId: value.zoneId } });
+              await evaluateStock(store, tenantId);
+              return json(response, 200, result);
+            }
+            if (action === "register") {
+              const product = (await store.productsFor(tenantId)).find(p => p.sku === value.sku && p.active !== false);
+              const zone = (await store.zonesFor(tenantId)).find(z => z.zoneId === value.zoneId && z.facilityId === value.facilityId && z.active !== false);
+              if (!product || !zone || !(await store.facilitiesFor(tenantId)).some(f=>f.facilityId===zone.facilityId&&f.active!==false)) throw new Error("Select an active product and initial location.");
+              if (value.readMode === "device") value.epcs = [...new Set((await rfidReader({port: process.env.RRU9809_PORT ?? "COM4", baudRate: Number(process.env.RRU9809_BAUD_RATE ?? 57600), scanCount: 5})).map(r => r.epc))];
+              else if (value.confirmed !== true || !String(value.reason ?? "").trim()) throw new Error("Confirm the physical count and enter a count reference.");
+              const epcs = normalizeEpcs(value.epcs);
+              const current = new Map((await store.inventoryFor(tenantId)).map(a => [a.epc, a]));
+              if (epcs.some(epc => current.get(epc)?.sku)) throw new Error("Some tags are already registered. Use location scans for existing inventory.");
+              await ensureOperatorStation(store, tenantId, zone);
+              await store.registerAssets(tenantId, epcs.map(epc => ({epc, sku: product.sku})));
+              const session = await store.startSession({tenantId, facilityId: zone.facilityId, zoneId: zone.zoneId, type: "receiving", reference: "Confirmed initial stock"});
+              await store.ingest({tenantId, facilityId: zone.facilityId, zoneId: zone.zoneId, readerId: "workflow-"+zone.zoneId, sessionId: session.sessionId, events: epcs.map(epc=>({epc,eventId:randomUUID(),observedAt:new Date().toISOString()}))});
+              await store.completeSession(tenantId, session.sessionId);
+              await store.recordAudit({tenantId,actorId:principal.actorId,actorRole:principal.role,action:"workflow.initial_stock",entityType:"session",entityId:session.sessionId,details:{readMode:value.readMode,reason:value.reason,epcs,sku:product.sku}});
+              return json(response,201,{registered:epcs.length});
+            }
+            if (action === "tag") {
+              const product = (await store.productsFor(tenantId)).find(p => p.sku === value.sku && p.active !== false);
+              const zone = (await store.zonesFor(tenantId)).find(z => z.zoneId === value.zoneId && z.facilityId === value.facilityId && z.active !== false);
+              if (!product || !zone || !(await store.facilitiesFor(tenantId)).some(f=>f.facilityId===zone.facilityId&&f.active!==false) || value.confirmed !== true) throw new Error("Select a product and initial location; confirm exactly one blank tag is on the writer.");
+              await ensureOperatorStation(store, tenantId, zone);
+              const batch = value.batchId ? await store.encodingBatchFor(tenantId,String(value.batchId)) : await store.createEncodingBatch(tenantId, { sku: value.sku, requestedQuantity: 1 });
+              if(!batch || batch.sku!==value.sku)throw new Error("Encoding batch does not match the selected product.");
+              if(value.batchId && !batch.queued)throw new Error("No queued tags remain in this batch. Review failed or in-progress jobs before creating a replacement batch.");
+              const job = await store.claimEncodingJob(tenantId, { stationId: "workflow-writer", batchId: batch.batchId });
+              if (!job || job.batchId !== batch.batchId) throw new Error("Another encoding job is queued. Complete it at the encoding station first.");
+              let written;
+              try {
+                written = await rfidWriter({ port: process.env.RRU9809_PORT ?? "COM4", baudRate: Number(process.env.RRU9809_BAUD_RATE ?? 57600), epc: job.epc });
+                if (!written.verified) throw new Error("Tag read-back verification failed.");
+              } catch(error) {
+                await store.finishEncodingJob(tenantId, { jobId: job.jobId, stationId: "workflow-writer", leaseToken: job.leaseToken, errorCode: "writer_error", errorMessage: error.message });
+                throw error;
+              }
+              const finished = await store.finishEncodingJob(tenantId, { jobId: job.jobId, stationId: "workflow-writer", leaseToken: job.leaseToken, observedEpc: written.epc, previousEpc: written.previousEpc });
+              if (!finished.verified) throw new Error("Read-back did not match the allocated EPC. No stock was added.");
+              const session = await store.startSession({ tenantId, facilityId: zone.facilityId, zoneId: zone.zoneId, type: "receiving", reference: "Verified RFID encoding" });
+              await store.ingest({ tenantId, facilityId: zone.facilityId, zoneId: zone.zoneId, readerId: "workflow-" + zone.zoneId, sessionId: session.sessionId, events: [{ epc: written.epc, eventId: randomUUID(), observedAt: new Date().toISOString() }] });
+              await store.completeSession(tenantId, session.sessionId);
+              return json(response, 201, { epc: written.epc, verified: true, batchId: batch.batchId });
+            }
+            return json(response, 404, { error: "unknown_workflow_action" });
+          } catch(error) { return json(response, 422, { error: "workflow_failed", message: error.message }); }
+        }
+        if (url.pathname === "/v1/admin/stock" && request.method === "GET") {
+          const state = await evaluateStock(store, tenantId);
+          return json(response, 200, { policies: state.policies, requests: state.requests.map(r=>({...r,...requestCancellation(r,principal.role,now?.()??Date.now())})), cancellationWindowMinutes:30 });
+        }
+        if (url.pathname === "/v1/admin/stock/policies" && request.method === "PUT") {
+          if (!["chain_admin", "hotel_admin"].includes(principal.role)) return json(response, 403, { error: "stock_settings_forbidden" });
+          try {
+            const value = JSON.parse(await readBody(request));
+            const product = (await store.productsFor(tenantId)).find((p) => p.sku === value.sku && p.active !== false);
+            if (!product) throw new Error("Select an active product belonging to this hotel.");
+            await store.updateOperations(tenantId, (state) => saveStockPolicy(state, value, principal.actorId));
+            const state = await evaluateStock(store, tenantId);
+            return json(response, 200, { policies: state.policies, requests: state.requests });
+          } catch (error) { return json(response, 422, { error: "invalid_stock_policy", message: error.message }); }
+        }
+        if (url.pathname === "/v1/admin/stock/requests" && request.method === "POST") {
+          if (principal.role === "chain_admin") return json(response, 403, { error: "hotel_order_required" });
+          try {
+            const value = JSON.parse(await readBody(request));
+            const quantity = Number(value.quantity);
+            if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 1000000) throw new Error("Enter a quantity between 1 and 1,000,000.");
+            if (!(await store.productsFor(tenantId)).some(p=>p.sku===value.sku && p.active !== false)) throw new Error("Select a product from your hotel inventory.");
+            const created = await store.updateOperations(tenantId, state => {
+              if (state.requests.some(r=>r.sku===value.sku && ["submitted","approved","shipped"].includes(r.status))) throw new Error("An open request already exists for this product. Track it before requesting more.");
+              const at = new Date().toISOString();
+              const order = {requestId:randomUUID(),tenantId,sku:value.sku,quantity,source:"manual",status:"submitted",createdAt:at,createdBy:principal.actorId,history:[{status:"submitted",actorId:principal.actorId,at}]};
+              state.requests.unshift(order); return order;
+            });
+            return json(response,201,created);
+          } catch(error) { return json(response,422,{error:"invalid_stock_request",message:error.message}); }
+        }
+        const stockRequest = url.pathname.match(/^\/v1\/admin\/stock\/requests\/([^/]+)$/);
+        if (stockRequest && request.method === "PUT") {
+          try {
+            const { status } = JSON.parse(await readBody(request));
+            const result = await store.updateOperations(tenantId, (state) => transitionRequest(state, decodeURIComponent(stockRequest[1]), status, principal, {now:now?.()??Date.now()}));
+            return json(response, 200, result);
+          } catch (error) { return json(response, 422, { error: "invalid_request_transition", message: error.message }); }
+        }
+        const stockDispatch = url.pathname.match(/^\/v1\/admin\/stock\/requests\/([^/]+)\/dispatch$/);
+        if (stockDispatch && request.method === "POST") {
+          if (principal.role !== "chain_admin") return json(response, 403, { error: "globaltex_admin_required" });
+          try {
+            const value = JSON.parse(await readBody(request));
+            if (value.supplierTenantId !== principal.tenantIds[0]) return json(response, 403, { error: "tenant_access_denied" });
+            return json(response, 200, await dispatchStockRequest(store, {
+              tenantId, requestId: decodeURIComponent(stockDispatch[1]), supplierTenantId: value.supplierTenantId,
+              sourceFacilityId: value.sourceFacilityId, destinationFacilityId: value.destinationFacilityId, epcs: value.epcs, actorId: principal.actorId
+            }));
+          } catch (error) { return json(response, 422, { error: "stock_dispatch_failed", message: error.message }); }
+        }
+        if (url.pathname === "/v1/admin/stock/overview" && request.method === "GET") {
+          if (principal.role !== "chain_admin") return json(response, 403, { error: "globaltex_admin_required" });
+          const requests = [];
+          for (const id of principal.tenantIds.slice(1)) {
+            requests.push(...(await store.operationsFor(id)).requests.map(commercialRequest));
+          }
+          const shipments = await store.shipmentsFor(principal.tenantIds[0]);
+          return json(response, 200, { requests: requests.sort((a,b) => b.createdAt.localeCompare(a.createdAt)), shipments });
         }
 
         if (request.method === "GET" && url.pathname === "/v1/admin/standards/profile") {
@@ -761,8 +1103,8 @@ export function createApp({
           try {
             const value = JSON.parse(await readBody(request) || "{}");
             const reads = await scanRru9809({
-              port: process.env.RRU9809_PORT ?? "COM4",
-              baudRate: Number(process.env.RRU9809_BAUD_RATE ?? 57600),
+              port: value.port || process.env.RRU9809_PORT || "COM4",
+              baudRate: Number(value.baudRate || process.env.RRU9809_BAUD_RATE || 57600),
               scanCount: Math.min(Math.max(Number(value.scanCount) || 1, 1), 10)
             });
             let ingestion = null;
@@ -802,10 +1144,19 @@ export function createApp({
             const detectedPort = ports.find((port) =>
               String(port.path).toLowerCase() === configuredPort.toLowerCase()
             );
+            const health = await store.gatewayHealthFor(tenantId);
+            const assigned = (await store.readersFor(tenantId)).filter((r) => r.active && r.adapter === "rru9809usb");
+            const latest = health.filter((item) => assigned.some((r) => r.readerId === item.readerId) &&
+              item.adapter.split("@")[0] === "rru9809usb")
+              .sort((a, b) => Date.parse(b.receivedAt) - Date.parse(a.receivedAt))[0] ?? null;
+            const telemetryState = !latest ? "standby" : latest.status === "offline" ? "timeout" : latest.status;
             return json(response, 200, {
               configuredPort,
               baudRate,
               detected: Boolean(detectedPort),
+              physicalLink: detectedPort ? "connected" : "disconnected",
+              telemetryState,
+              lastHeartbeatAt: latest?.receivedAt ?? null,
               availablePorts: ports.map((port) => ({
                 path: port.path,
                 manufacturer: port.manufacturer ?? null,
@@ -822,6 +1173,29 @@ export function createApp({
               error: "rru9809_status_failed",
               message: error.message
             });
+          }
+        }
+
+        if (request.method === "POST" && url.pathname === "/v1/admin/hardware/rru9809/detect") {
+          try {
+            const ports = await SerialPort.list();
+            const likely = ports.find((port) => /cp210|silicon|usb|uart|serial/i.test(
+              `${port.manufacturer ?? ""} ${port.pnpId ?? ""} ${port.path ?? ""}`
+            )) ?? null;
+            if (likely?.path) process.env.RRU9809_PORT = likely.path;
+            return json(response, 200, {
+              detected: Boolean(likely),
+              recommendedPort: likely?.path ?? null,
+              baudRate: Number(process.env.RRU9809_BAUD_RATE ?? 57600),
+              availablePorts: ports.map((port) => ({
+                path: port.path,
+                manufacturer: port.manufacturer ?? null,
+                vendorId: port.vendorId ?? null,
+                productId: port.productId ?? null
+              }))
+            });
+          } catch (error) {
+            return json(response, 503, { error: "rru9809_detect_failed", message: error.message });
           }
         }
 
@@ -842,6 +1216,13 @@ export function createApp({
           }
         }
 
+        if(request.method==='POST' && url.pathname==='/v1/admin/zoho/catalog/import'){
+          if(principal.role!=='chain_admin'||principal.tenantId!==principal.tenantIds[0])return json(response,403,{error:'globaltex_admin_required'});
+          try{
+            const report=JSON.parse(readFileSync(process.env.ZOHO_MAPPING_REPORT_JSON??'data/runtime/zoho-mapping-report.json','utf8'));
+            return json(response,200,await importZohoCatalog(store,principal.tenantId,report));
+          }catch(error){return json(response,422,{error:'zoho_catalog_import_failed',message:error.message});}
+        }
         if (request.method === "GET" && url.pathname === "/v1/admin/zoho/catalog") {
           if (principal.role !== "chain_admin") {
             return json(response, 200, {
@@ -929,7 +1310,7 @@ export function createApp({
             return json(response, 403, { error: "chain_admin_required" });
           }
           const summaries = await Promise.all(
-            principal.tenantIds.map(async (allowedTenantId) => ({
+            principal.tenantIds.slice(0, 1).map(async (allowedTenantId) => ({
               tenantId: allowedTenantId,
               summary: await store.summaryFor(allowedTenantId)
             }))
@@ -998,15 +1379,45 @@ export function createApp({
           });
         }
 
+        if (request.method === "GET" && url.pathname === "/v1/admin/linen-operations") {
+          const result = await linenOperations(store, tenantId, {
+            now: now?.() ?? Date.now(),
+            safetyMargin: Number(url.searchParams.get("safetyMargin") ?? 20)
+          });
+          for (const item of result.notSeen) {
+            await store.raiseException({
+              tenantId,
+              dedupeKey: `not-seen:${item.epc}`,
+              exceptionType: "not_seen_30_days",
+              severity: "warning",
+              epc: item.epc,
+              details: { lastSeenAt: item.lastSeenAt, thresholdDays: 30 }
+            });
+          }
+          return json(response, 200, result);
+        }
+
         const exceptionResolution = url.pathname.match(
           /^\/v1\/admin\/exceptions\/([^/]+)\/resolve$/
         );
         if (request.method === "POST" && exceptionResolution) {
           try {
             const value = JSON.parse(await readBody(request));
+            const caseId = decodeURIComponent(exceptionResolution[1]);
+            if (value.resolution === "quarantine_bill") {
+              const exception = (await store.exceptionsFor(tenantId, { limit: 500 }))
+                .find((item) => item.caseId === caseId);
+              if (exception?.epc) {
+                await store.updateAssetStatus(tenantId, exception.epc, {
+                  status: "quarantined",
+                  reason: "Exception resolution: quarantine and billing review",
+                  actorId: principal.actorId
+                });
+              }
+            }
             return json(response, 200, await store.resolveException(
               tenantId,
-              decodeURIComponent(exceptionResolution[1]),
+              caseId,
               { resolution: value.resolution, actorId: principal.actorId }
             ));
           } catch (error) {
@@ -1064,7 +1475,8 @@ export function createApp({
         }
 
         if (request.method === "GET" && url.pathname === "/v1/admin/facilities") {
-          return json(response, 200, { facilities: await store.facilitiesFor(tenantId) });
+          const facilities = await store.facilitiesFor(tenantId);
+          return json(response, 200, { facilities: principal.role === "chain_admin" && tenantId !== principal.tenantIds[0] ? facilities.filter(f => f.facilityType === "hotel").map(({facilityId,name,facilityType,active})=>({facilityId,name,facilityType,active})) : facilities });
         }
 
         if (request.method === "POST" && url.pathname === "/v1/admin/zones") {
@@ -1176,8 +1588,8 @@ export function createApp({
           try {
             const value = JSON.parse(await readBody(request));
             return json(response, 201, await store.createShipment({
-              tenantId,
               ...value,
+              tenantId,
               actorId: principal.actorId
             }));
           } catch (error) {
@@ -1208,12 +1620,14 @@ export function createApp({
         if (request.method === "POST" && acceptance) {
           try {
             const value = JSON.parse(await readBody(request));
-            return json(response, 200, await store.reconcileShipment({
+            const result = await store.reconcileShipment({
               tenantId,
               shipmentId: decodeURIComponent(acceptance[1]),
               sessionId: value.sessionId,
               accept: true
-            }));
+            });
+            await evaluateStock(store, tenantId);
+            return json(response, 200, result);
           } catch (error) {
             return json(response, 422, { error: "invalid_reconciliation", message: error.message });
           }
@@ -1234,7 +1648,7 @@ export function createApp({
                 reason: location.reason
               });
             }
-            return json(response, 201, await store.startSession({ tenantId, ...value }));
+            return json(response, 201, await store.startSession({ ...value, tenantId }));
           } catch (error) {
             return json(response, 422, { error: "invalid_session", message: error.message });
           }
@@ -1343,6 +1757,8 @@ export function createApp({
           sessionId: batch.sessionId ?? null,
           events: batch.events
         });
+        await enforceLifespan(store, credential.tenantId);
+        await evaluateStock(store, credential.tenantId);
         return json(response, 202, result);
       }
 
@@ -1408,4 +1824,6 @@ export function createApp({
       return json(response, status, { error: error.message === "body_too_large" ? error.message : "internal_error" });
     }
   });
+  server.once("close", () => clearInterval(stockMonitor));
+  return server;
 }

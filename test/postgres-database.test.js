@@ -78,7 +78,10 @@ test("PostgreSQL migration runner records each SQL file transactionally", async 
       "009_admin_user_directory.sql",
       "010_customer_api_safety.sql",
       "011_encoding_orchestration.sql",
-      "012_receiving_batches.sql"
+      "012_receiving_batches.sql",
+      "013_linen_operations.sql",
+      "014_hotel_operations.sql",
+      "015_supply_workflow.sql"
   ]);
   assert.equal(mock.clientQueries[0].sql, "BEGIN");
   assert.match(mock.clientQueries[1].sql, /CREATE TABLE tenants/);

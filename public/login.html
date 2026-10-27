@@ -75,21 +75,21 @@
       <div class="brand"><img class="brand-logo" src="/assets/globaltex-logo.png" alt="Globaltex Fine Linens"><span class="brand-title">RFID Operations</span></div>
       <div class="story-main">
         <div class="eyebrow">Hotel textile intelligence</div>
-        <h1>Every item.<br>One clear history.</h1>
-        <p>Secure chain-wide control for inventory, custody, reader health and operational exceptions.</p>
+        <h1>Every item has its place.<br>Your inventory under control.</h1>
+        <p>Track your hotel products, locations and stock requests in one place.</p>
       </div>
       <div class="proof"><span>Tenant isolated</span><span>Audited operations</span><span>Edge resilient</span></div>
     </section>
     <section class="form-side">
       <h2>Welcome back</h2>
-      <p class="intro">Sign in with your assigned operations account.</p>
+      <p class="intro">Sign in with the account provided by Globaltex.</p>
       <form id="login-form">
         <div class="field"><label for="username">Username</label><input id="username" name="username" autocomplete="username" required autofocus></div>
         <div class="field"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required></div>
-        <button id="submit" type="submit">Sign in to operations</button>
+        <button id="submit" type="submit">Sign in</button>
         <div class="error" id="error" role="alert"></div>
       </form>
-      <div class="foot">Access is restricted by role and assigned hotel tenants. Authentication attempts and administrative changes are protected by the platform security boundary.</div>
+      <div class="foot">For account or password support, contact Globaltex. Your account can only access assigned hotels.</div>
     </section>
   </main>
   <script>
@@ -99,7 +99,7 @@
       const button = document.querySelector("#submit");
       const error = document.querySelector("#error");
       button.disabled = true;
-      button.textContent = "Signing in...";
+      button.textContent = "Signing in…";
       error.textContent = "";
       try {
         const response = await fetch("/v1/auth/login", {
@@ -111,12 +111,12 @@
             password: form.password.value
           })
         });
-        if (!response.ok) throw new Error("Username or password is incorrect.");
+        if (!response.ok) throw new Error("Incorrect username or password. Please check your details.");
         location.replace("/dashboard");
       } catch (failure) {
         error.textContent = failure.message;
         button.disabled = false;
-        button.textContent = "Sign in to operations";
+        button.textContent = "Sign in";
       }
     });
   </script>

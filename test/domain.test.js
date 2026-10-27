@@ -69,6 +69,31 @@ test("registered EPCs produce SKU packaging summaries and unknown tags stay visi
   assert.equal(summary.lines[0].looseUnits, 1);
 });
 
+test("clean-return gates increment wash life and flag threshold inspection", () => {
+  const store = new InventoryStore();
+  store.upsertProducts("hotel-a", [{
+    sku: "BT-001", name: "Bath Towel", unitsPerBox: 1, boxesPerPallet: 1
+  }]);
+  store.upsertFacility("hotel-a", {
+    facilityId: "hotel-1", name: "Hotel", facilityType: "hotel"
+  });
+  store.upsertZone("hotel-a", {
+    zoneId: "clean-return", facilityId: "hotel-1", name: "Clean Return", zoneType: "clean_return"
+  });
+  store.registerAssets("hotel-a", [{
+    epc: "AAAAAAAA00000060", sku: "BT-001", washCount: 59, cyclePhase: "washing"
+  }]);
+  store.ingest({
+    tenantId: "hotel-a", readerId: "reader-1", facilityId: "hotel-1", zoneId: "clean-return",
+    events: [{ eventId: "clean-cycle-60", epc: "AAAAAAAA00000060", observedAt: "2026-07-01T12:00:00.000Z" }]
+  });
+  const [asset] = store.inventoryFor("hotel-a");
+  assert.equal(asset.washCount, 60);
+  assert.equal(asset.inspectionRequired, true);
+  assert.equal(store.linenOperationsFor("hotel-a").stages.clean, 1);
+  assert.equal(store.exceptionsFor("hotel-a", { exceptionType: "wash_threshold" }).length, 1);
+});
+
 test("unattended zone changes remain pending until a second consistent read", () => {
   const store = new InventoryStore();
   const base = {

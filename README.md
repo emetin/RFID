@@ -6,6 +6,22 @@
 
 Globaltex textile products can be tracked across hotels, warehouses and laundries with item-level RFID reads. The application derives box and pallet equivalents from unique tagged-unit counts and remains independent of a specific reader brand.
 
+## Daily workflow
+
+The company portal follows Hotels & users → Tag & receive products →
+Warehouses & transfers → Hotel orders. The separate hotel portal follows
+Receive deliveries → Locations & laundry → Request stock. Company accounts
+cannot access a customer's internal hotel inventory or room/laundry operations.
+See the [operating guide and acceptance roadmap](docs/supply-workflow-roadmap.md).
+Both portals include role-scoped [reports and CSV exports](docs/reporting.md).
+Houston/Miami setup creates location records only; it never creates inventory.
+
+For the local design preview, run `npm run start:preview` and open
+`http://127.0.0.1:8085/dashboard`. The **Test workspace** dropdown switches between
+Globaltex and a read-only hotel preview containing isolated in-memory sample data.
+It does not impersonate a real hotel or change the signed-in account. This feature
+requires `ENABLE_HOTEL_PREVIEW=true` and is always disabled in production.
+
 ## How it works
 
 An EPC Class 1 Gen2 / ISO 18000-63 reader can read the unique EPC stored on a compatible UHF tag. Reader data reaches the Edge Gateway through MQTT, HTTP, LLRP or a vendor SDK. The Gateway converts every device format into one Globaltex event contract.
@@ -36,6 +52,11 @@ adapters fail closed when a supported region is not configured.
 - persistent unknown/missing/unexpected EPC cases with operator resolution
 - audited textile lifecycle states and available-vs-physical inventory totals
 - signed Gateway heartbeat with online, degraded and offline reader health
+- separate physical serial-link and telemetry heartbeat states, with automatic port detection
+- clean-return wash-cycle counting, 60-cycle inspection flags and 30-day not-seen exceptions
+- hotel PAR monitoring across clean, in-room, soiled and in-wash stages
+- high-contrast bulk cart/portal reconciliation with expected, scanned and missing counts
+- clickable closed-loop exception actions for reassignment, misplaced and quarantine/billing review
 - tenant-scoped hotel, zone and reader provisioning with assignment enforcement
 - viewer/operator/hotel-admin/chain-admin RBAC and tenant-scoped audit history
 - allowlisted chain-admin multi-hotel inventory and SKU rollup
@@ -44,7 +65,7 @@ adapters fail closed when a supported region is not configured.
 - verified SQLite snapshots with SHA-256 manifests and a controlled restore runbook
 - tenant-scoped raw-read retention preview and bounded purge
 - automatic full-pallet, remaining-box and loose-unit calculations
-- English operations dashboard
+- localized English, Spanish and Turkish operations dashboard
 - CSV-ready product templates
 - production PostgreSQL schema with row-level tenant isolation
 - hardware-free reader simulator

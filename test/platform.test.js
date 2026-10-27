@@ -21,7 +21,7 @@ async function withAdminServer(run) {
   const store = new InventoryStore();
   const server = createApp({
     credentials: { "reader-key": credential },
-    admin: { token: "admin-secret", tenantId: credential.tenantId },
+    admin: { token: "admin-secret", tenantId: credential.tenantId, role: "chain_admin" },
     store
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -148,17 +148,21 @@ test("admin can import the product CSV and load the English dashboard", async ()
 
     const dashboard = await fetch(`${apiUrl}/dashboard`, { headers: { authorization } });
     assert.equal(dashboard.status, 200);
-    assert.match(await dashboard.text(), /RFID OPERATIONS/);
-    const inventoryPage = await fetch(`${apiUrl}/dashboard/inventory`, {
-      headers: { authorization }
-    });
-    assert.equal(inventoryPage.status, 200);
-    const inventoryHtml = await inventoryPage.text();
-    assert.match(inventoryHtml, /Inventory by product/);
-    assert.match(inventoryHtml, /Product catalog setup/);
-    assert.match(inventoryHtml, /catalog-product-form/);
-    assert.match(inventoryHtml, /catalog-csv-form/);
-    assert.match(inventoryHtml, /asset-csv-form/);
+    const dashboardHtml = await dashboard.text();
+    assert.match(dashboardHtml, /assets\/workflow.js/);
+    assert.match(dashboardHtml, /id="hotel-form"/);
+    const workflow = await fetch(apiUrl + "/assets/workflow.js");
+    assert.equal(workflow.status, 200);
+    const workflowScript = await workflow.text();
+    assert.match(workflowScript, /Hotels & users/);
+    assert.match(workflowScript, /Warehouses & transfers/);
+    assert.match(workflowScript, /Hotel use & laundry/);
+    const hotelManagement = await fetch(apiUrl + "/dashboard/control", { headers: { authorization } });
+    assert.equal(hotelManagement.status, 200);
+    assert.match(await hotelManagement.text(), /id="hotel-form"/);
+    const inventory = await fetch(apiUrl + "/v1/admin/workflow", { headers: { authorization } });
+    assert.equal(inventory.status, 200);
+    assert.equal((await inventory.json()).products[0].sku, "BT-001");
   });
 });
 
@@ -269,7 +273,7 @@ test("provisioned reader can write only to its assigned hotel zone", async () =>
   const store = new InventoryStore();
   const server = createApp({
     credentials: { "reader-key": credential },
-    admin: { token: "admin-secret", tenantId: credential.tenantId },
+    admin: { token: "admin-secret", tenantId: credential.tenantId, role: "chain_admin" },
     store,
     requireProvisionedReaders: true
   });
@@ -340,7 +344,7 @@ test("provisioned reader can write only to its assigned hotel zone", async () =>
   }
 });
 
-test("chain admin switches authorized tenants while viewer mutations are audited and blocked", async () => {
+test("company admin cannot enter hotel operations; viewer mutations are audited and blocked", async () => {
   const store = new InventoryStore();
   const server = createApp({
     credentials: {
@@ -379,16 +383,7 @@ test("chain admin switches authorized tenants while viewer mutations are audited
         "x-tenant-id": "hotel-b"
       }
     });
-    assert.equal(identityResponse.status, 200);
-    assert.deepEqual(await identityResponse.json(), {
-      actorId: "chain-ops",
-      displayName: "chain-ops",
-      role: "chain_admin",
-      tenantId: "hotel-b",
-      tenantIds: ["hotel-a", "hotel-b"],
-      managed: false,
-      userId: null
-    });
+    assert.equal(identityResponse.status, 403, "company access cannot impersonate a hotel workspace");
 
     for (const tenantId of ["hotel-a", "hotel-b"]) {
       const response = await fetch(`${apiUrl}/v1/admin/facilities`, {
@@ -404,7 +399,7 @@ test("chain admin switches authorized tenants while viewer mutations are audited
           facilityType: "hotel"
         })
       });
-      assert.equal(response.status, 200);
+      assert.equal(response.status, tenantId === "hotel-a" ? 200 : 403);
     }
 
     const viewerMutation = await fetch(`${apiUrl}/v1/admin/facilities`, {
@@ -461,7 +456,7 @@ test("chain admin switches authorized tenants while viewer mutations are audited
   }
 });
 
-test("chain admin receives an allowlisted multi-hotel inventory rollup", async () => {
+test("company rollup excludes customer hotel inventory", async () => {
   const store = new InventoryStore();
   const tenants = ["hotel-a", "hotel-b"];
   for (const tenantId of tenants) {
@@ -533,14 +528,14 @@ test("chain admin receives an allowlisted multi-hotel inventory rollup", async (
     });
     assert.equal(response.status, 200);
     const result = await response.json();
-    assert.equal(result.tenantCount, 2);
+    assert.equal(result.tenantCount, 1);
     assert.deepEqual(result.totals, {
-      uniqueUnits: 3,
-      registeredUnits: 3,
+      uniqueUnits: 1,
+      registeredUnits: 1,
       unknownUnits: 0,
-      availableUnits: 3,
+      availableUnits: 1,
       statusCounts: {
-        active: 3,
+        active: 1,
         quarantined: 0,
         damaged: 0,
         lost: 0,
@@ -549,13 +544,13 @@ test("chain admin receives an allowlisted multi-hotel inventory rollup", async (
       }
     });
     assert.equal(result.lines[0].sku, "BT-001");
-    assert.equal(result.lines[0].units, 3);
-    assert.equal(result.lines[0].tenantCount, 2);
-    assert.equal(result.lines[0].fullBoxes, 1);
+    assert.equal(result.lines[0].units, 1);
+    assert.equal(result.lines[0].tenantCount, 1);
+    assert.equal(result.lines[0].fullBoxes, 0);
     assert.equal(result.lines[0].looseUnits, 1);
     assert.deepEqual(
       result.tenants.map((tenant) => [tenant.tenantId, tenant.uniqueUnits]),
-      [["hotel-a", 1], ["hotel-b", 2]]
+      [["hotel-a", 1]]
     );
 
     const forbidden = await fetch(`${apiUrl}/v1/admin/chain/summary`, {
@@ -578,7 +573,7 @@ test("custom login creates persistent users with scoped hotel access", async () 
         "chain-secret": {
           actorId: "bootstrap-admin",
           role: "chain_admin",
-          tenantIds: ["hotel-a", "hotel-b"],
+          tenantIds: ["globaltex", "hotel-a", "hotel-b"],
           defaultTenantId: "hotel-a"
         }
       }
@@ -606,7 +601,7 @@ test("custom login creates persistent users with scoped hotel access", async () 
       headers: {
         cookie: bootstrapCookie,
         "content-type": "application/json",
-        "x-tenant-id": "hotel-a"
+        "x-tenant-id": "globaltex"
       },
       body: JSON.stringify({
         username: "operator@example.com",
@@ -654,7 +649,7 @@ test("custom login creates persistent users with scoped hotel access", async () 
   }
 });
 
-test("hotel admin previews and executes raw read retention through the API", async () => {
+test("Globaltex admin previews and executes raw read retention through the API", async () => {
   await withAdminServer(async (apiUrl, store) => {
     store.ingest({
       tenantId: credential.tenantId,
@@ -884,7 +879,7 @@ test("shipment receiving reconciles EPCs and transfers accepted assets to the ho
         secret: "supplier-secret"
       }
     },
-    admin: { token: "supplier-admin", tenantId: supplierTenantId },
+    admin: { token: "supplier-admin", tenantId: supplierTenantId, role: "chain_admin" },
     store
   });
   const hotelServer = createApp({
